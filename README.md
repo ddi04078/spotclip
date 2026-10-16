@@ -1,9 +1,1 @@
-# SpotClip browser preview
-
-This branch serves the self-contained SpotClip HTML demo.
-
-Enable GitHub Pages in repository Settings → Pages → Deploy from a branch → gh-pages → /(root).
-
-Expected URL after activation: https://ddi04078.github.io/spotclip/
-
-Place extraction and resolution are Mock. Images and saved places stay in the visitor's browser.
+SpotClip browser OCR preview. Korean/English models and worker are served from this branch. Photos stay in the browser. Map verification is not connected; confirm candidates before saving. No paid AI calls.
