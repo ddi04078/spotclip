@@ -1,3 +1,7 @@
+> 최신 웹 체험: 기본 업로드는 Tesseract 기반 한국어·영어 브라우저 OCR입니다. 사진은 외부로 전송하지 않습니다.
+> 첫 사용에는 같은 사이트의 OCR 인식 파일을 내려받습니다. 지도 API 미연결이므로 후보 확인 후 수동 저장하며, 유료 AI는 호출하지 않습니다.
+> Mock은 설정에서 ‘예시 체험 모드’를 명시적으로 선택했을 때만 사용합니다. 다운로드 HTML의 OCR에는 옆의 ocr/ 파일과 HTTP 호스팅이 필요합니다.
+
 # SpotClip · Native MVP
 
 SNS에서 발견한 장소를 **사진 선택 → 분석 → 장소 확인 → 저장 → 지도 열기**로 모으는 iOS/Android 앱입니다. 하나의 저장소에서 **React Native + Expo SDK 57 + TypeScript + Expo Router**를 사용합니다. PC 테스트는 같은 화면·로직의 Expo Web 렌더러를 사용합니다. 별도의 PWA/Vite 앱은 만들지 않습니다.

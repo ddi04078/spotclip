@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { ReactNode } from 'react';
 import { colors } from './theme.ts';
 export default function AppFrame({ children }: { children: ReactNode }) {
-  return <View style={styles.desktop}><View style={styles.caption}><Text style={styles.title}>SpotClip · PC 테스트</Text><Text style={styles.description}>휴대폰 화면처럼 조작해보세요 · 장소 분석은 Mock입니다</Text></View><View style={styles.phone}>{children}</View></View>;
+  return <View style={styles.desktop}><View style={styles.caption}><Text style={styles.title}>SpotClip · PC 테스트</Text><Text style={styles.description}>사진 속 글자를 브라우저에서 읽어요 · 지도 확인은 아직 미연결</Text></View><View style={styles.phone}>{children}</View></View>;
 }
 const styles = StyleSheet.create({
   desktop: { flex: 1, backgroundColor: '#E8EDE5', alignItems: 'center' },

@@ -12,12 +12,16 @@ export function extractPlaceCandidates(text: string, limit = 5): ExtractedPlace[
     seen.add(key); results.push(candidate);
   }
   const bounded = text.slice(0, 30000);
-  for (const p of extractPlaces(bounded)) add({ name: p.name, addressHint: p.address, confidence: .92 });
-  for (const raw of bounded.split(/\r?\n/)) {
+  const paired = extractPlaces(bounded.replace(/(\S)(서울|부산|경기|제주)(?=\s+[가-힣])/g, '$1\n$2'));
+  for (const p of paired) add({ name: p.name, addressHint: p.address, confidence: .92 });
+  const lines = bounded.split(/\r?\n/);
+  for (const [index, raw] of lines.entries()) {
     const name = raw.replace(/^[\s📍•·#\d.)-]+/, '').replace(/\s+/g, ' ').trim();
     if (name.length < 2 || name.length > 60 || noise.test(name)) continue;
     if (/^(?:서울|부산|경기|제주).*\d/.test(name)) continue;
     const englishPlace = /^[A-Z][A-Z\s&'-]{2,50}$/.test(name) && /\b(?:SEOUL|CAFE|COFFEE|BAKERY|MUSEUM|HOTEL)\b/.test(name);
+    const nearby = normalize(lines.slice(Math.max(0, index - 2), index + 3).join(' '));
+    if (englishPlace && paired.some(p => /[가-힣]/.test(p.name) && nearby.includes(normalize(p.name)) && nearby.includes(normalize(p.address)))) continue;
     if (placeWord.test(name) || englishPlace) add({ name, confidence: .7 });
   }
   return results.slice(0, Math.max(0, Math.min(5, limit)));

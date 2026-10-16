@@ -11,6 +11,7 @@ test('OCR noise is filtered; likely Korean and English place names survive', () 
 });
 test('OCR pairs names and addresses without calling a network service', () => {
   const found = extractPlaceCandidates('하이그라운드 제빵소\nHIGHGROUND BAKERY\n서울 강북구 삼양로181길 161');
+  assert.equal(found.length, 1); // Korean + English captions describe one place.
   assert.equal(found[0].name, '하이그라운드 제빵소');
   assert.equal(found[0].addressHint, '서울 강북구 삼양로181길 161');
 });

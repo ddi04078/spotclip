@@ -4,7 +4,7 @@ import type { AnalysisReport, Place, PlaceRepository, PlaceSource, ResolvedPlace
 import type { MockScenario } from './providers/MockExtractionProvider.ts';
 import { isOnDeviceOcrAvailable, onDeviceOcr } from '../platform/ocr';
 import { createOcrFirstServices } from './ocr/createOcrFirstServices.ts';
-import { MockPlaceResolver } from './providers/MockPlaceResolver.ts';
+import { UnverifiedPlaceResolver } from './providers/UnverifiedPlaceResolver.ts';
 import { createServices } from './createServices.ts';
 import { SourceUnavailableError } from './ingestPlaceSource.ts';
 import { placeStorage, analysisSettingsStorage } from '../platform/nativeStorage.ts';
@@ -24,8 +24,9 @@ export interface AppDependencies {
   request?: typeof fetch;
   /** Explicit injected policy; shipping defaults keep paid analysis disabled. */
   paidAnalysisEnabled?: boolean;
+  defaultOcr?: boolean;
 }
-const defaults: AppDependencies = { storage: placeStorage, pickImages: pickScreenshots, pruneImages, openMap, id: randomUUID, settings: analysisSettingsStorage };
+const defaults: AppDependencies = { storage: placeStorage, pickImages: pickScreenshots, pruneImages, openMap, id: randomUUID, settings: analysisSettingsStorage, defaultOcr: isOnDeviceOcrAvailable };
 const AppContext = createContext<ReturnType<typeof useController> | null>(null);
 export function AppProvider({ children, dependencies = defaults }: { children: ReactNode; dependencies?: AppDependencies }) {
   const controller = useController(dependencies);
@@ -52,7 +53,7 @@ function useController(deps: AppDependencies) {
     void deps.settings?.save(settingsRef.current).catch(e => setError(message(e)));
   }
   // Runtime only: credentials and transmission consent never enter browser/AsyncStorage.
-  const [ocrMode, setOcrMode] = useState(false);
+  const [ocrMode, setOcrMode] = useState(deps.defaultOcr === true);
   const [remote, setRemote] = useState<{ endpoint: string; token: string } | null>(null);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState('');
@@ -60,7 +61,7 @@ function useController(deps: AppDependencies) {
   const [notice, setNotice] = useState('');
   const [urlBlocked, setUrlBlocked] = useState(false);
   const guard = useRef(false);
-  const services = useMemo(() => ocrMode ? createOcrFirstServices({ ocr: onDeviceOcr, resolver: new MockPlaceResolver(), repository: deps.storage, id: deps.id }) : createServices(deps.storage, { scenario, mockAutoSave }, deps.id, remote ? {
+  const services = useMemo(() => ocrMode ? createOcrFirstServices({ ocr: onDeviceOcr, resolver: new UnverifiedPlaceResolver(), repository: deps.storage, id: deps.id }) : createServices(deps.storage, { scenario, mockAutoSave }, deps.id, remote ? {
     endpoint: remote.endpoint, accessToken: async () => remote.token, consent: async () => true,
     readImage: deps.readImage || readAnalysisImage, request: deps.request,
   } : undefined), [deps, scenario, mockAutoSave, remote, ocrMode]);
@@ -120,7 +121,7 @@ function useController(deps: AppDependencies) {
   const enableOcr = () => run(async () => {
     if (!isOnDeviceOcrAvailable) throw new Error('기기 OCR은 iPhone Development Build가 필요해요.');
     setRemote(null); setOcrMode(true); setReport(null); setUrlBlocked(false);
-    setNotice('기기 OCR을 켰어요. 장소 검색은 아직 Mock이며 AI를 호출하지 않아요.');
+    setNotice('사진 속 글자를 읽어요. 지도 API로 확인하지 않은 후보는 직접 확인 후 저장해주세요.');
   });
   const pick = () => run(async () => {
     setBusy('사진을 선택해주세요…');
@@ -139,11 +140,19 @@ function useController(deps: AppDependencies) {
     if (!current || guard.current) return;
     setReport({ ...current, items: current.items.map(item => item.id === id ? { ...item, selected, decision: 'ready', confirmed: selected.verification !== 'unverified' } : item) });
   }
+  function confirmCandidate(id: string, name: string, address: string) {
+    if (guard.current || !name.trim() || !address.trim() || name.length > 200 || address.length > 300) return;
+    const current = reportRef.current;
+    if (!current || current.mode !== 'ocr') return;
+    setReport({ ...current, items: current.items.map(item => item.id === id ? {
+      ...item, selected: { name: name.trim(), address: address.trim(), category: '기타', mapProvider: 'none', confidence: Math.min(.65, item.candidate.confidence), verification: 'unverified' }, decision: 'ready', confirmed: true,
+    } : item) });
+  }
   const remove = (id: string) => run(async () => { await deps.storage.remove(id); await reload(); await clean(); setNotice('장소를 삭제했어요.'); });
   const update = (place: Place) => run(async () => { await deps.storage.update(place); await reload(); setNotice('변경 내용을 저장했어요.'); });
   const map = (place: Place, app: MapApp) => run(() => deps.openMap(place, app));
   const reset = () => run(async () => { setReport(null); setUrlBlocked(false); await clean(null); });
-  return { paidAnalysisEnabled, ocrMode, ocrAvailable: isOnDeviceOcrAvailable, enableOcr, realMode: !!remote, remoteEndpoint: remote?.endpoint || '', configureRemote, disableRemote, places, report, scenario, setScenario, mockAutoSave, setMockAutoSave, ready, busy, error, notice, urlBlocked, pick, ingestPlaceSource, save, choose, remove, update, map, reset };
+  return { confirmCandidate, paidAnalysisEnabled, ocrMode, ocrAvailable: isOnDeviceOcrAvailable, enableOcr, realMode: !!remote, remoteEndpoint: remote?.endpoint || '', configureRemote, disableRemote, places, report, scenario, setScenario, mockAutoSave, setMockAutoSave, ready, busy, error, notice, urlBlocked, pick, ingestPlaceSource, save, choose, remove, update, map, reset };
 }
 function message(e: unknown): string { return e instanceof Error ? e.message : '처리하지 못했어요. 잠시 후 다시 시도해주세요.'; }
 function saveMessage(saved: number, duplicates: number): string {

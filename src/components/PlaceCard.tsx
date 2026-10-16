@@ -10,7 +10,7 @@ export default function PlaceCard({ place, onEdit }: { place: Place; onEdit: () 
   const app = useSpotClip();
   return <View style={styles.card} testID="place-card"><View style={styles.top}>
     {place.sourceImageUri ? <Image style={styles.picture} source={{ uri: displayImageUri(place.sourceImageUri) }} accessibilityLabel={`${place.name} 저장 사진`} /> : <View style={[styles.picture, styles.picturePlaceholder]}><Icon name={categoryIcons[place.category]} size={30} /></View>}
-    <View style={{ flex: 1, gap: 5 }}><View style={styles.tags}><Tag>{place.category}</Tag>{place.verification === 'mock' && <Tag mock>Mock</Tag>}{place.visited && <Text style={styles.visited}>다녀옴</Text>}</View><Text style={styles.name}>{place.name}</Text></View>
+    <View style={{ flex: 1, gap: 5 }}><View style={styles.tags}><Tag>{place.category}</Tag>{place.verification === 'mock' && <Tag mock>Mock</Tag>}{place.verification === 'unverified' && <Tag mock>미확인 · 직접 저장</Tag>}{place.visited && <Text style={styles.visited}>다녀옴</Text>}</View><Text style={styles.name}>{place.name}</Text></View>
     <Pressable accessibilityRole="button" accessibilityLabel={`${place.name} 수정`} onPress={onEdit} disabled={!!app.busy} style={styles.more}><Icon name="ellipsis-horizontal" size={22} color={colors.muted} /></Pressable>
   </View><View style={styles.addressRow}><Icon name="location-outline" size={14} color={colors.muted} /><Text style={styles.address}>{place.address}</Text></View><Text style={styles.source}>{platformNames[place.sourcePlatform]}에서 저장 · {new Date(place.createdAt).toLocaleDateString('ko-KR')}</Text>
     {place.note ? <Text style={styles.note}>{place.note}</Text> : null}

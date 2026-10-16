@@ -1,4 +1,6 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import type { AnalysisItem } from '../domain/types.ts';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSpotClip } from '../services/AppProvider.tsx';
 import { Button, Icon, Tag } from './ui.tsx';
@@ -14,16 +16,18 @@ export default function AnalysisResults() {
   const image = report.source.kind === 'image' || report.source.kind === 'screenshot' ? report.source.images[0]?.reference : undefined;
   return <View style={styles.container} testID="analysis-results">
     <View style={styles.heading}><View style={styles.sparkle}><Icon name="sparkles-outline" size={23} /></View><View style={{ flex: 1 }}><Text style={styles.eyebrow}>YOUR LITTLE DISCOVERIES</Text><Text accessibilityRole="header" style={styles.title}>{completed === report.items.length && completed ? '수집함에 담았어요' : `${report.items.length}개의 장소를 찾았어요`}</Text></View>{image && <Image source={{ uri: displayImageUri(image) }} style={styles.preview} accessibilityLabel="선택한 사진" />}</View>
-    {report.mode === 'ocr' && <Text style={styles.subtitle}>기기 OCR 결과예요. 장소 검색은 아직 Mock이며 AI는 호출하지 않았어요.</Text>}
+    {report.mode === 'ocr' && <Text style={styles.subtitle}>사진에서 읽은 미확인 후보예요. 지도 API 확인 전이므로 이름·주소를 확인한 뒤 저장해주세요.</Text>}
     {report.mode === 'mock' && <View style={styles.mockBanner}><Tag mock>Mock</Tag><Text style={styles.mockText}>사진을 실제로 분석한 결과가 아닌 체험 데이터예요. 지도 API로 확인하지 않았어요.</Text></View>}
+    {report.mode === 'ocr' && report.rawText && <OcrText text={report.rawText} />}
     {!report.items.length && <Text style={styles.subtitle}>장소를 찾지 못했어요. 사진이나 본문을 다시 선택해주세요.</Text>}
     {report.items.map(item => <View style={styles.result} key={item.id}>
-      <View style={styles.resultRow}><View style={styles.placeIcon}><Icon name="location-outline" size={21} /></View><View style={{ flex: 1 }}><Text style={styles.placeName}>{item.selected?.name || item.candidate.name}</Text><Text style={styles.address}>{item.selected?.address || '어느 곳인가요? 지점만 골라주세요.'}</Text></View>{item.decision === 'saved' && <Icon name="checkmark-circle" />}</View>
+      <View style={styles.resultRow}><View style={styles.placeIcon}><Icon name="location-outline" size={21} /></View><View style={{ flex: 1 }}><Text style={styles.placeName}>{item.selected?.name || item.candidate.name}</Text><Text style={styles.address}>{item.selected?.address || item.candidate.addressHint || (report.mode === 'ocr' ? '주소를 읽지 못했어요.' : '어느 곳인가요? 지점만 골라주세요.')}</Text></View>{item.decision === 'saved' && <Icon name="checkmark-circle" />}</View>
       {item.decision === 'duplicate' && <Text style={styles.savedText}>이미 저장한 장소예요</Text>}
-      {item.decision === 'saved' && <Text style={styles.savedText}>{item.selected?.verification === 'mock' ? 'Mock 장소 저장됨' : '저장됨'}</Text>}
+      {item.decision === 'saved' && <Text style={styles.savedText}>{item.selected?.verification === 'mock' ? 'Mock 장소 저장됨' : item.selected?.verification === 'unverified' ? '직접 확인 후 저장 · 지도 API 미확인' : '저장됨'}</Text>}
       {item.matches.length > 1 && !['saved', 'duplicate'].includes(item.decision) && <View accessibilityRole="radiogroup" accessibilityLabel="지점 선택" style={styles.branches}>{item.matches.map(match => <Pressable accessibilityRole="radio" accessibilityLabel={match.name} accessibilityState={{ checked: item.selected?.providerId === match.providerId, disabled: !!app.busy }} disabled={!!app.busy} onPress={() => app.choose(item.id, match)} key={match.providerId || match.address} style={styles.branch}><Icon name={item.selected?.providerId === match.providerId ? 'radio-button-on' : 'radio-button-off'} size={21} /><View style={{ flex: 1 }}><Text style={styles.branchName}>{match.name}</Text><Text style={styles.address}>{match.address}</Text></View></Pressable>)}</View>}
-      {item.decision === 'unresolved' && <Text style={styles.subtitle}>{report.mode === 'mock' ? '이 장소는 아직 확인할 수 없어요. 현재 Mock에 등록된 예시만 분석할 수 있습니다.' : '공식 검색에서 일치하는 장소를 찾지 못했어요. 주소가 보이는 캡처나 본문으로 다시 시도해주세요.'}</Text>}
-      {item.decision === 'ready' && item.selected?.verification === 'unverified' && <Text style={styles.subtitle}>실제 장소 검색 API 연결이 필요해요. 확인되지 않은 장소는 자동 저장하지 않아요.</Text>}
+      {report.mode === 'ocr' && !['saved', 'duplicate'].includes(item.decision) && <CandidateReview item={item} />}
+      {item.decision === 'unresolved' && report.mode !== 'ocr' && <Text style={styles.subtitle}>{report.mode === 'mock' ? '이 장소는 아직 확인할 수 없어요. 현재 Mock에 등록된 예시만 분석할 수 있습니다.' : '공식 검색에서 일치하는 장소를 찾지 못했어요. 주소가 보이는 캡처나 본문으로 다시 시도해주세요.'}</Text>}
+      {item.decision === 'ready' && item.selected?.verification === 'unverified' && !item.confirmed && report.mode !== 'ocr' && <Text style={styles.subtitle}>실제 장소 검색 API 연결이 필요해요. 확인되지 않은 장소는 자동 저장하지 않아요.</Text>}
     </View>)}
     {ready > 0 && <Button label={`모두 저장 (${ready}곳)`} onPress={() => void app.save()} disabled={!!app.busy} icon="bookmark-outline" />}
     {completed > 0 && <Button label="내 장소에서 확인하기" icon="arrow-forward" onPress={() => router.navigate('/places')} disabled={!!app.busy} />}
@@ -46,3 +50,18 @@ const styles = StyleSheet.create({
   branches: { marginTop: 4, gap: 8 }, branch: { flexDirection: 'row', gap: 10, alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, minHeight: 68 },
   branchName: { color: colors.ink, fontSize: 14, fontWeight: '500' }, again: { minHeight: 46, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 }, againText: { color: colors.green, fontSize: 13 },
 });
+
+function CandidateReview({ item }: { item: AnalysisItem }) {
+  const app = useSpotClip();
+  const [name, setName] = useState(item.candidate.name);
+  const [address, setAddress] = useState(item.candidate.addressHint || '');
+  return <View style={{ gap: 10 }}><Text style={styles.subtitle}>지도 API 미확인 · 잘못 읽힌 글자가 있으면 수정해주세요.</Text>
+    <TextInput accessibilityLabel="후보 장소명" value={name} onChangeText={setName} maxLength={200} editable={!app.busy} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.ink }} />
+    <TextInput accessibilityLabel="후보 주소" placeholder="사진에 나온 주소" value={address} onChangeText={setAddress} maxLength={300} editable={!app.busy} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.ink }} />
+    <Button label="확인하고 저장" secondary disabled={!!app.busy || !name.trim() || !address.trim()} onPress={() => { app.confirmCandidate(item.id, name, address); void app.save(); }} />
+  </View>;
+}
+function OcrText({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return <View><Pressable accessibilityRole="button" onPress={() => setOpen(!open)} style={{ paddingVertical: 12 }}><Text style={styles.againText}>{open ? '읽은 원문 접기' : '사진에서 읽은 원문 보기'}</Text></Pressable>{open && <Text selectable style={styles.subtitle}>{text}</Text>}</View>;
+}

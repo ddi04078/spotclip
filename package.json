@@ -17,7 +17,7 @@
     "test:ui": "jest --runInBand",
     "build": "expo export --platform ios --platform android --output-dir dist --max-workers 2",
     "web": "expo start --web --max-workers 2 --port 8082",
-    "build:web": "expo export --platform web --output-dir dist-web --max-workers 2",
+    "build:web": "node scripts/prepare-ocr-assets.mjs && expo export --platform web --output-dir dist-web --max-workers 2",
     "test:web": "playwright test --config playwright.config.ts",
     "preview:pc": "node scripts/pc-preview.mjs",
     "build:html": "node scripts/build-html-preview.mjs",
@@ -30,6 +30,8 @@
     "@expo/metro-runtime": "~57.0.17",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/kor": "^1.0.0",
     "expo": "~57.0.29",
     "expo-constants": "~57.0.22",
     "expo-crypto": "~57.0.4",
@@ -50,7 +52,8 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.1",
+    "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

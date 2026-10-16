@@ -3,6 +3,9 @@ test('PC mobile preview: choose actual file, mock auto-save, reload, retain prev
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await page.context().route('https://map.naver.com/**', route => route.fulfill({ contentType: 'text/html', body: '<title>Map link test</title>' }));
   await page.goto('/');
+  await page.getByRole('button', { name: '설정 및 사용 안내', exact: true }).click();
+  await page.getByRole('button', { name: '예시 체험 모드', exact: true }).click();
+  await page.getByRole('button', { name: '사진 올리기로 돌아가기', exact: true }).click();
   await expect(page.getByText('SpotClip · PC 테스트')).toBeVisible();
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: '사진 / 스크린샷 올리기', exact: true }).click();
@@ -21,8 +24,11 @@ test('PC mobile preview: choose actual file, mock auto-save, reload, retain prev
 test('PC preview supports branch selection and prevents duplicates', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '설정 및 사용 안내', exact: true }).click();
+  await page.getByRole('button', { name: '예시 체험 모드', exact: true }).click();
+  await page.getByRole('button', { name: '사진 올리기로 돌아가기', exact: true }).click();
+  await page.getByRole('button', { name: '설정 및 사용 안내', exact: true }).click();
   await page.getByRole('radio', { name: '지점 선택', exact: true }).click();
-  await page.goBack();
+  await page.getByRole('button', { name: '사진 올리기로 돌아가기', exact: true }).click();
   for (let attempt = 0; attempt < 2; attempt++) {
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: '사진 / 스크린샷 올리기', exact: true }).click();
