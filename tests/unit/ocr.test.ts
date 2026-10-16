@@ -37,3 +37,23 @@ test('empty OCR and OCR failures do not fabricate or save places and never trigg
   const broken = createOcrFirstServices({ repository, id: ids(), ocr: { async recognize() { throw new Error('OCR unavailable'); } }, resolver: { async resolve() { return []; } } });
   await assert.rejects(broken.ingestPlaceSource({ kind: 'image', images: [image] }), /OCR unavailable/);
 });
+
+test('reported 2+2+1 bilingual duplicates become three candidates without inventing a Korean name', () => {
+  const sources = ['하이그라운드 제빵소\nHIGHGROUND BAKERY', '테라로사 국립현대미술관서울점\nTERAROSA MMCA SEOUL', 'ofoztollzly 대역박점\nCAFE I GOT EVERYTHING\n서울 종로구 세종대로 193'];
+  const groups = sources.map(t => extractPlaceCandidates(t));
+  assert.deepEqual(groups.map(g => g.length), [1, 1, 1]);
+  assert.equal(groups[0][0].aliases?.[0], 'HIGHGROUND BAKERY');
+  assert.equal(groups[2][0].name, 'CAFE I GOT EVERYTHING');
+  assert.equal(groups[2][0].confidence, .35);
+  assert.ok(groups[2][0].recognitionWarning);
+});
+test('joined city names and split street lines retain addresses; distinct branches remain separate', () => {
+  const found = extractPlaceCandidates('카페 하나\nCAFE ONE\n서울강북구\n삼양로181길 161\n카페 하나\nCAFE ONE\n서울종로구 세종대로 193');
+  assert.equal(found.length, 2);
+  assert.equal(found[0].addressHint, '서울 강북구 삼양로181길 161');
+  assert.equal(found[1].addressHint, '서울 종로구 세종대로 193');
+});
+test('two independently addressed Korean and English businesses are not merged', () => {
+  const found = extractPlaceCandidates('카페 하나\n서울 종로구 삼청로 30\nCAFE TWO\n서울 강북구 삼양로181길 161');
+  assert.equal(found.length, 2);
+});

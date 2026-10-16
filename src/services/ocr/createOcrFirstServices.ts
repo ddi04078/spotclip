@@ -35,7 +35,7 @@ export function createOcrFirstServices(options: {
       seen.add(key); candidates.push({ ...c, sourceImageUri: source.kind === 'image' || source.kind === 'screenshot' ? source.images[i].reference : undefined });
     }
     // Empty/low-confidence OCR is surfaced for review; never silently spends money.
-    return { mode: 'ocr', candidates, rawText: texts.join('\n').slice(0, 30000) };
+    return { mode: 'ocr', candidates, rawText: texts.map((text, i) => `사진 ${i + 1} OCR 원문\n${text}`).join('\n\n').slice(0, 30000) };
   } };
   return createIngestService({ extraction, resolver, repository: options.repository, id: options.id, now: () => new Date().toISOString() });
 }

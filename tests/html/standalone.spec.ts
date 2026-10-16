@@ -67,10 +67,12 @@ test('real Korean browser OCR reads three images without a paid API and saves on
   const files = [];
   for (let i = 0; i < names.length; i++) {
     const data = await page.evaluate(({ name, address }) => {
-      const c = document.createElement('canvas'); c.width = 1400; c.height = 500;
-      const x = c.getContext('2d')!; x.fillStyle = 'white'; x.fillRect(0, 0, c.width, c.height);
-      x.fillStyle = 'black'; x.font = 'bold 52px "Noto Sans CJK KR", sans-serif'; x.fillText(name, 60, 260);
-      x.font = '42px "Noto Sans CJK KR", sans-serif'; x.fillText(address, 60, 360);
+      const c = document.createElement('canvas'); c.width = 700; c.height = 1000;
+      const x = c.getContext('2d')!; x.fillStyle = '#405c50'; x.fillRect(0, 0, c.width, c.height);
+      x.fillStyle = '#f1d498'; x.fillRect(20, 100, 300, 500); x.fillStyle = '#1c1c1c'; x.fillRect(0, 720, 700, 280);
+      x.fillStyle = 'white'; x.font = 'bold 32px "Noto Sans CJK KR", sans-serif'; x.fillText(name, 28, 800);
+      x.font = 'bold 26px sans-serif'; x.fillText(name.includes('제빵') ? 'HIGHGROUND BAKERY' : name.includes('테라로사') ? 'TERAROSA MMCA SEOUL' : 'CAFE I GOT EVERYTHING', 28, 850);
+      x.font = '26px "Noto Sans CJK KR", sans-serif'; x.fillText(address, 28, 920);
       return c.toDataURL('image/png').split(',')[1];
     }, { name: names[i], address: addresses[i] });
     files.push({ name: `capture-${i}.png`, mimeType: 'image/png', buffer: Buffer.from(data, 'base64') });
@@ -80,8 +82,15 @@ test('real Korean browser OCR reads three images without a paid API and saves on
   await (await chooser).setFiles(files);
   await expect(page.getByTestId('analysis-results')).toBeVisible({ timeout: 120000 });
   await page.getByRole('button', { name: '사진에서 읽은 원문 보기', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '미확인 후보 3개', exact: true })).toBeVisible();
+  const candidateNames = await page.getByLabel('후보 장소명', { exact: true }).evaluateAll(els => els.map(e => (e as HTMLInputElement).value));
+  const candidateAddresses = await page.getByLabel('후보 주소', { exact: true }).evaluateAll(els => els.map(e => (e as HTMLInputElement).value));
+  expect(candidateNames).toEqual([names[0], names[1], 'CAFE | GOT EVERYTHING']);
+  await expect(page.getByText('한글 상호 인식이 불확실해요. 영문 표기와 원본 사진을 확인해주세요.', { exact:true })).toBeVisible();
+  await page.getByLabel('후보 장소명', {exact:true}).nth(2).fill(names[2]);
+  expect(candidateAddresses.map(s => s.replace(/\s/g, ''))).toEqual(addresses.map(s => s.replace(/\s/g, '')));
   const raw = await page.getByTestId('analysis-results').innerText();
-  expect(raw).toContain('하이그라운드'); expect(raw).toContain('테라로사'); expect(raw).toContain('아이갓');
+  expect(raw).toContain('하이그라운드'); expect(raw).toContain('테라로사'); expect(raw).toContain('CAFE | GOT EVERYTHING');
   expect(raw).not.toContain('도온정');
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('하이그라운드'); // no automatic writes
   const save = page.getByRole('button', { name: '확인하고 저장', exact: true }).first();
@@ -90,4 +99,22 @@ test('real Korean browser OCR reads three images without a paid API and saves on
   await page.getByRole('button', { name: '내 장소에서 확인하기', exact: true }).click();
   await expect(page.getByTestId('place-card')).toHaveCount(1);
   await expect(page.getByText('미확인 · 직접 저장', { exact: true })).toBeVisible();
+});
+
+
+for (const width of [320, 390, 1280]) test(`scroll reaches last result and navigation at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await page.getByRole('tab', { name: '링크 · 본문', exact: true }).click();
+  await page.getByLabel('게시물 링크 또는 본문', { exact: true }).fill('하이그라운드 제빵소\nHIGHGROUND BAKERY\n서울강북구\n삼양로181길 161\n테라로사 국립현대미술관 서울점\nTERAROSA MMCA SEOUL\n서울 종로구 삼청로 30');
+  await page.getByRole('button', { name: '장소 찾기', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '미확인 후보 2개', exact: true })).toBeVisible();
+  const getScroll = () => page.getByTestId('analysis-results').evaluate(el => { let p: HTMLElement | null = el as HTMLElement; while(p) { if (getComputedStyle(p).overflowY === 'auto' && p.scrollHeight > p.clientHeight) return { top:p.scrollTop, height:p.clientHeight, total:p.scrollHeight }; p=p.parentElement; } return null; });
+  expect(await getScroll()).not.toBeNull();
+  const initial = (await getScroll())!.top;
+  await page.mouse.move((width - Math.min(width, 430)) / 2 + 12, 500); await page.mouse.wheel(0, 5000);
+  await expect.poll(async () => (await getScroll())!.top).toBeGreaterThan(initial);
+  await expect(page.getByRole('button', { name: /다른 사진으로 새로 담기/ })).toBeInViewport();
+  await expect(page.getByRole('tab', { name: '내 장소', exact: true })).toBeInViewport();
+  expect(await page.getByLabel('후보 주소', { exact:true }).first().evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
+  expect(await page.evaluate(() => document.body.scrollHeight)).toBeLessThanOrEqual(844);
 });

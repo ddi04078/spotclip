@@ -24,6 +24,8 @@ export interface ExtractedPlace {
   name: string;
   regionHint?: string;
   addressHint?: string;
+  aliases?: string[];
+  recognitionWarning?: string;
   confidence: number;
   sourceImageUri?: string;
 }

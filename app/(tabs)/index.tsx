@@ -29,7 +29,7 @@ export default function AddScreen() {
     <Text style={styles.mockWarning}>{app.ocrMode ? '사진 속 글자를 읽어 장소 후보를 찾아요. 지도 API로 확인한 결과는 아니므로 이름·주소를 확인한 뒤 저장해주세요. 첫 실행은 인식 파일 다운로드로 시간이 걸릴 수 있어요. 유료 AI 호출은 없어요.' : app.realMode ? '선택한 사진·본문을 외부 서버와 AI로 전송해 분석해요. 명확하지 않은 장소는 확인 후 저장해요. 서버 오류 시 Mock 결과로 대신 저장하지 않아요.' : '현재는 선택한 사진과 무관한 Mock 예시로 분석·저장 흐름을 체험합니다. 실제 분석은 설정에서 서버 연결 후 사용할 수 있어요.'}</Text>
     {app.busy && <Notice progress>{app.busy}</Notice>}{app.error && <Notice error>{app.error}</Notice>}{app.notice && <Notice>{app.notice}</Notice>}
     {app.urlBlocked && <Button label="게시물 캡처 사진 올리기" secondary icon="image-outline" disabled={disabled} onPress={() => { setTab('photo'); void app.pick(); }} />}
-    <View onLayout={() => { if (app.report) scroll.current?.scrollToEnd({ animated: true }); }}><AnalysisResults /></View>
+    <View><AnalysisResults /></View>
     <View style={styles.footer}><Icon name="lock-closed-outline" size={13} color={colors.muted} /><Text style={styles.footerText}>{app.realMode ? '장소는 이 기기에 보관해요. 분석할 사진·본문은 외부로 전송해요.' : '장소는 이 기기에만 보관해요. 사진은 서버에 보내지 않아요.'}</Text></View>
   </ScrollView></KeyboardAvoidingView></SafeAreaView>;
 }

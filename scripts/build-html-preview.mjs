@@ -26,7 +26,7 @@ const result = await build({
   } }],
 });
 const script = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
-const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SpotClip · HTML 체험</title><style>@font-face{font-family:SpotClipIcons;src:url(data:font/ttf;base64,${font}) format('truetype');font-display:block}html,body,#root{height:100%;width:100%;margin:0}body{overflow:hidden}*{box-sizing:border-box}</style></head><body><div id="root"></div><script>${script}</script></body></html>`;
+const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SpotClip · HTML 체험</title><style>@font-face{font-family:SpotClipIcons;src:url(data:font/ttf;base64,${font}) format('truetype');font-display:block}html,body,#root{height:100%;width:100%;margin:0}#root{display:flex;flex-direction:column;min-height:0}body{overflow:hidden}*{box-sizing:border-box}</style></head><body><div id="root"></div><script>${script}</script></body></html>`;
 await mkdir(path.join(root, 'dist-html'), { recursive: true });
 await writeFile(path.join(root, 'dist-html/SpotClip.html'), html);
 console.log(`Standalone SpotClip.html generated (${Buffer.byteLength(html)} bytes). OCR assets are hosted alongside the HTML; images stay in the browser.`);
