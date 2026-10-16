@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "SpotClip",
+    "slug": "spotclip",
+    "version": "0.2.0",
+    "scheme": "spotclip",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.spotclip.mobile"
+    },
+    "android": {
+      "package": "app.spotclip.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#386652"
+      },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SNS에서 발견한 장소의 스크린샷을 선택하기 위해 사진에 접근합니다.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 120,
+          "backgroundColor": "#F7F8F4"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "web": {
+      "output": "single",
+      "favicon": "./assets/icon.png"
+    }
+  }
+}
