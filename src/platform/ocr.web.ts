@@ -27,7 +27,10 @@ export const onDeviceOcr: OcrProvider = {
         await engine.setParameters({ tessedit_pageseg_mode: PSM.AUTO });
         const retry = await engine.recognize(input);
         const quality = (value: string) => extractPlaceCandidates(value).reduce((n, c) => n + (c.addressHint ? 4 : 1) - (c.recognitionWarning ? 2 : 0), 0);
-        if (quality(retry.data.text) > quality(text)) text = retry.data.text;
+        const retryCandidates = extractPlaceCandidates(retry.data.text);
+        // A tighter crop must not discard separately named places from the full image.
+        const retainsCoverage = retryCandidates.length >= candidates.length || candidates.length <= 1;
+        if (retainsCoverage && quality(retry.data.text) > quality(text)) text = retry.data.text;
       }
       return { text: text.slice(0, 30000) };
     } catch {
@@ -39,7 +42,7 @@ export const onDeviceOcr: OcrProvider = {
 /** Upscale caption region and normalize contrast. Keeps full image when not portrait. */
 async function prepareCaption(uri: string): Promise<string> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = uri; });
-  const top = image.height > image.width * 1.2 ? Math.round(image.height * .45) : 0;
+  const top = image.height > image.width * 1.2 ? Math.round(image.height * .68) : 0;
   const scale = Math.min(3, 2200 / image.width);
   const canvas = document.createElement('canvas'); canvas.width = Math.round(image.width * scale); canvas.height = Math.round((image.height - top) * scale);
   const ctx = canvas.getContext('2d')!; ctx.drawImage(image, 0, top, image.width, image.height - top, 0, 0, canvas.width, canvas.height);

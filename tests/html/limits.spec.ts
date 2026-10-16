@@ -83,3 +83,14 @@ test('blurred social UI text does not become a fictional place',async({page})=>{
   await expect(page.getByRole('heading',{name:'미확인 후보 0개',exact:true})).toBeVisible({timeout:45000});
   expect(await page.evaluate(()=>localStorage.length)).toBe(0);
 });
+
+test('reported corrupted mixed-case caption, separated English and copyright mark produce three clean review candidates',async({page})=>{
+  await page.getByRole('tab',{name:'링크 · 본문',exact:true}).click();
+  await page.getByLabel('게시물 링크 또는 본문',{exact:true}).fill('하이그라운드 제빵소\nHIGHGROUND BAKERY\n주소: 서울강북구\n삼양로181길 161 ©\n테라로사 국립현대미술관 서울점\nTERAROSA MMCA SEOUL\n서울 종로구 삼청로 30\nofolZtojl=2]d 대역박점\n서울 종로구 세종대로 193 ©\nCAFE I GOT EVERYTHING');
+  await page.getByRole('button',{name:'장소 찾기',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'미확인 후보 3개',exact:true})).toBeVisible();
+  expect(await page.getByLabel('후보 장소명',{exact:true}).evaluateAll(els=>els.map(e=>(e as HTMLInputElement).value))).toEqual(['하이그라운드 제빵소','테라로사 국립현대미술관 서울점','CAFE I GOT EVERYTHING']);
+  expect(await page.getByLabel('후보 주소',{exact:true}).evaluateAll(els=>els.map(e=>(e as HTMLInputElement).value))).toEqual(['서울 강북구 삼양로181길 161','서울 종로구 삼청로 30','서울 종로구 세종대로 193']);
+  await expect(page.getByText('한글 상호 인식이 불확실해요. 영문 표기와 원본 사진을 확인해주세요.',{exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>localStorage.length)).toBe(0);
+});

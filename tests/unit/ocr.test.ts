@@ -57,3 +57,27 @@ test('two independently addressed Korean and English businesses are not merged',
   const found = extractPlaceCandidates('카페 하나\n서울 종로구 삼청로 30\nCAFE TWO\n서울 강북구 삼양로181길 161');
   assert.equal(found.length, 2);
 });
+
+test('reported mixed-case/digit/symbol corruption and non-adjacent English share one uncertain candidate', () => {
+  for (const bad of ['ofolZtojl=2]d 대역박점', 'ofolZtojl2d 대역박점', 'ofoztollzly 대역박점']) {
+    for (const text of [`${bad}\n서울 종로구 세종대로 193 ©\nCAFE I GOT EVERYTHING`, `${bad}\nCAFE I GOT EVERYTHING\n서울 종로구 세종대로 193 ©`]) {
+      const found = extractPlaceCandidates(text);
+      assert.equal(found.length, 1);
+      assert.equal(found[0].name, 'CAFE I GOT EVERYTHING');
+      assert.equal(found[0].addressHint, '서울 종로구 세종대로 193');
+      assert.equal(found[0].confidence, .35);
+      assert.ok(found[0].recognitionWarning);
+    }
+  }
+});
+test('address labels, UI icons and wrapped lines are cleaned without losing road numbers or unit details', () => {
+  const found = extractPlaceCandidates('하이그라운드 제빵소\nHIGHGROUND BAKERY\n주소: 서울강북구\n삼양로181길 161 ©');
+  assert.equal(found.length, 1);
+  assert.equal(found[0].addressHint, '서울 강북구 삼양로181길 161');
+  const floor = extractPlaceCandidates('카페 테스트\n서울 종로구 삼청로 30-2 (삼청동) 2층 ©');
+  assert.equal(floor[0].addressHint, '서울 종로구 삼청로 30-2 (삼청동) 2층');
+});
+test('an uncertain mixed-script brand alone is flagged; ordinary uppercase brand is not automatically treated as corrupt', () => {
+  assert.equal(extractPlaceCandidates('ofolZtojl=2]d 대역박점\n서울 종로구 세종대로 193')[0].confidence,.35);
+  assert.equal(extractPlaceCandidates('STARBUCKS 카페\n서울 종로구 삼청로 30')[0].recognitionWarning,undefined);
+});
