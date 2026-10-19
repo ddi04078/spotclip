@@ -1,10 +1,14 @@
+import { EvidencePlaceResolver } from './resolution/EvidencePlaceResolver.ts';
+import { createRemotePlaceSearch } from './resolution/RemotePlaceSearch.ts';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { randomUUID } from 'expo-crypto';
-import type { AnalysisReport, Place, PlaceRepository, PlaceSource, ResolvedPlace, SourceImage } from '../domain/types.ts';
+import type { AnalysisReport, Place, PlaceRepository, PlaceSource, ResolvedPlace, SourceImage, ExtractedPlace, PlaceResolverProvider } from '../domain/types.ts';
 import type { MockScenario } from './providers/MockExtractionProvider.ts';
 import { isOnDeviceOcrAvailable, onDeviceOcr } from '../platform/ocr';
 import { createOcrFirstServices } from './ocr/createOcrFirstServices.ts';
 import { UnverifiedPlaceResolver } from './providers/UnverifiedPlaceResolver.ts';
+import { placeEvidence } from './resolution/placeEvidence.ts';
+import { openCandidateSearch } from '../platform/linking/openMap.ts';
 import { createServices } from './createServices.ts';
 import { SourceUnavailableError } from './ingestPlaceSource.ts';
 import { placeStorage, analysisSettingsStorage } from '../platform/nativeStorage.ts';
@@ -25,6 +29,8 @@ export interface AppDependencies {
   /** Explicit injected policy; shipping defaults keep paid analysis disabled. */
   paidAnalysisEnabled?: boolean;
   defaultOcr?: boolean;
+  placeResolver?: PlaceResolverProvider;
+  searchCandidate?: (candidate: ExtractedPlace, app: MapApp) => Promise<void>;
 }
 const defaults: AppDependencies = { storage: placeStorage, pickImages: pickScreenshots, pruneImages, openMap, id: randomUUID, settings: analysisSettingsStorage, defaultOcr: isOnDeviceOcrAvailable };
 const AppContext = createContext<ReturnType<typeof useController> | null>(null);
@@ -54,6 +60,8 @@ function useController(deps: AppDependencies) {
   }
   // Runtime only: credentials and transmission consent never enter browser/AsyncStorage.
   const [ocrMode, setOcrMode] = useState(deps.defaultOcr === true);
+  const [placeSearchRemote, setPlaceSearchRemote] = useState<{endpoint:string;token:string}|null>(null);
+  const evidenceResolver = useMemo(() => placeSearchRemote ? new EvidencePlaceResolver(createRemotePlaceSearch({endpoint:placeSearchRemote.endpoint, token:async()=>placeSearchRemote.token, consent:async()=>true, request:deps.request})) : null, [placeSearchRemote,deps.request]);
   const [remote, setRemote] = useState<{ endpoint: string; token: string } | null>(null);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState('');
@@ -61,10 +69,10 @@ function useController(deps: AppDependencies) {
   const [notice, setNotice] = useState('');
   const [urlBlocked, setUrlBlocked] = useState(false);
   const guard = useRef(false);
-  const services = useMemo(() => ocrMode ? createOcrFirstServices({ ocr: onDeviceOcr, resolver: new UnverifiedPlaceResolver(), repository: deps.storage, id: deps.id }) : createServices(deps.storage, { scenario, mockAutoSave }, deps.id, remote ? {
+  const services = useMemo(() => ocrMode ? createOcrFirstServices({ ocr: onDeviceOcr, resolver: deps.placeResolver || evidenceResolver || new UnverifiedPlaceResolver(), repository: deps.storage, id: deps.id }) : createServices(deps.storage, { scenario, mockAutoSave }, deps.id, remote ? {
     endpoint: remote.endpoint, accessToken: async () => remote.token, consent: async () => true,
     readImage: deps.readImage || readAnalysisImage, request: deps.request,
-  } : undefined), [deps, scenario, mockAutoSave, remote, ocrMode]);
+  } : undefined), [deps, scenario, mockAutoSave, remote, ocrMode, evidenceResolver]);
   const setReport = (next: AnalysisReport | null) => { reportRef.current = next; setReportState(next); };
   async function reload() { const data = await deps.storage.list(); setPlaces(data); return data; }
   async function clean(keepReport = reportRef.current) {
@@ -104,6 +112,15 @@ function useController(deps: AppDependencies) {
     } finally { await clean(); }
   }
   const paidAnalysisEnabled = deps.paidAnalysisEnabled === true;
+  const configurePlaceSearch = (endpoint: string, token: string, consent: boolean) => run(async () => {
+    if (!isOnDeviceOcrAvailable) throw new Error('현재 환경은 사진 OCR을 지원하지 않아요.');
+    if (!consent) throw new Error('상호·주소의 외부 검색 전송에 동의해주세요.');
+    if (token.trim().length < 32) throw new Error('서버 접근 토큰은 32자 이상이어야 해요. 카카오 API 키를 넣지 마세요.');
+    createRemotePlaceSearch({ endpoint: endpoint.trim(), token:async()=>token.trim(), consent:async()=>true });
+    setPlaceSearchRemote({ endpoint:endpoint.trim(),token:token.trim() }); setOcrMode(true); setRemote(null); setReport(null);
+    setNotice('장소 검색을 설정했어요. 첫 분석 요청에서 서버 연결을 확인해요. 사진이나 유료 AI 요청은 보내지 않아요.');
+  });
+  const disconnectPlaceSearch = () => run(async () => {setPlaceSearchRemote(null);setReport(null);setNotice('자동 장소 검색을 껐어요. OCR은 계속 사용할 수 있어요.');});
   const configureRemote = (endpoint: string, token: string, consent: boolean) => run(async () => {
     if (!paidAnalysisEnabled) throw new Error('이번 검증 단계에서는 유료 AI 분석을 사용하지 않아요. Mock 또는 기기 OCR을 사용해주세요.');
     if (!consent) throw new Error('사진·본문의 외부 전송에 동의해주세요.');
@@ -145,14 +162,15 @@ function useController(deps: AppDependencies) {
     const current = reportRef.current;
     if (!current || current.mode !== 'ocr') return;
     setReport({ ...current, items: current.items.map(item => item.id === id ? {
-      ...item, selected: { name: name.trim(), address: address.trim(), category: '기타', mapProvider: 'none', confidence: Math.min(.65, item.candidate.confidence), verification: 'unverified' }, decision: 'ready', confirmed: true,
+      ...item, selected: { name: name.trim(), address: address.trim(), category: placeEvidence(item.candidate).category || '기타', mapProvider: 'none', confidence: Math.min(.65, item.candidate.confidence), verification: 'unverified' }, decision: 'ready', confirmed: true,
     } : item) });
   }
   const remove = (id: string) => run(async () => { await deps.storage.remove(id); await reload(); await clean(); setNotice('장소를 삭제했어요.'); });
   const update = (place: Place) => run(async () => { await deps.storage.update(place); await reload(); setNotice('변경 내용을 저장했어요.'); });
+  const searchCandidate = (candidate: ExtractedPlace, app: MapApp) => run(() => (deps.searchCandidate || openCandidateSearch)(candidate, app));
   const map = (place: Place, app: MapApp) => run(() => deps.openMap(place, app));
   const reset = () => run(async () => { setReport(null); setUrlBlocked(false); await clean(null); });
-  return { confirmCandidate, paidAnalysisEnabled, ocrMode, ocrAvailable: isOnDeviceOcrAvailable, enableOcr, realMode: !!remote, remoteEndpoint: remote?.endpoint || '', configureRemote, disableRemote, places, report, scenario, setScenario, mockAutoSave, setMockAutoSave, ready, busy, error, notice, urlBlocked, pick, ingestPlaceSource, save, choose, remove, update, map, reset };
+  return { placeSearchConfigured: !!placeSearchRemote, configurePlaceSearch, disconnectPlaceSearch, searchCandidate, confirmCandidate, paidAnalysisEnabled, ocrMode, ocrAvailable: isOnDeviceOcrAvailable, enableOcr, realMode: !!remote, remoteEndpoint: remote?.endpoint || '', configureRemote, disableRemote, places, report, scenario, setScenario, mockAutoSave, setMockAutoSave, ready, busy, error, notice, urlBlocked, pick, ingestPlaceSource, save, choose, remove, update, map, reset };
 }
 function message(e: unknown): string { return e instanceof Error ? e.message : '처리하지 못했어요. 잠시 후 다시 시도해주세요.'; }
 function saveMessage(saved: number, duplicates: number): string {

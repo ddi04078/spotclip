@@ -94,3 +94,44 @@ test('reported corrupted mixed-case caption, separated English and copyright mar
   await expect(page.getByText('한글 상호 인식이 불확실해요. 영문 표기와 원본 사진을 확인해주세요.',{exact:true})).toBeVisible();
   expect(await page.evaluate(()=>localStorage.length)).toBe(0);
 });
+
+test('evidence plan and public map search use cafe/region without an automatic API request',async({page,context})=>{
+  await page.getByRole('tab',{name:'링크 · 본문',exact:true}).click();
+  await page.getByLabel('게시물 링크 또는 본문',{exact:true}).fill('아이갓에브리씽 대역박점\nCAFE I GOT EVERYTHING\n서울 종로구 세종대로 193');
+  await page.getByRole('button',{name:'장소 찾기',exact:true}).click();
+  await expect(page.getByText('업종 단서: 카페 · 지역 단서: 서울 종로구',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'검색 단서 보기',exact:true}).click();
+  await expect(page.getByText('1. 아이갓에브리씽 서울 종로구 카페',{exact:true})).toBeVisible();
+  await context.route('https://map.kakao.com/**',r=>r.fulfill({contentType:'text/html',body:'<title>Test map target</title>'}));
+  const popup=page.waitForEvent('popup');
+  await page.getByRole('button',{name:'카카오맵에서 찾기',exact:true}).click();
+  const map=await popup;expect(decodeURIComponent(map.url())).toContain('아이갓에브리씽 서울 종로구 카페');await map.close();
+  expect(await page.evaluate(()=>localStorage.length)).toBe(0);
+});
+
+test('OCR-only server setup uses consent, bounded queries and official results without uploading images; token is forgotten',async({page,context})=>{
+  const token='personal-search-test-'.repeat(3);let calls=0;
+  await context.route('https://search.example/api/search',async r=>{
+    calls++;expect(r.request().headers().authorization).toBe(`Bearer ${token}`);
+    const body=r.request().postDataJSON();expect(Object.keys(body)).toEqual(['query']);expect(body.query).toBe('아이갓에브리씽 서울 종로구 카페');
+    await r.fulfill({contentType:'application/json',body:JSON.stringify({matches:[{name:'아이갓에브리씽 대역박점',address:'서울 종로구 세종대로 193',category:'카페',mapProvider:'kakao',providerId:'123',verification:'official',confidence:.7}]})});
+  });
+  await page.getByRole('button',{name:'설정 및 사용 안내',exact:true}).click();
+  await page.getByLabel('장소 검색 서버 주소',{exact:true}).fill('https://search.example/api/search');
+  await page.getByLabel('장소 검색 서버 접근 토큰',{exact:true}).fill(token);
+  await expect(page.getByRole('button',{name:'AI 없이 장소 검색 연결',exact:true})).toBeDisabled();
+  await page.getByRole('switch',{name:'장소 검색어 외부 전송 동의',exact:true}).click();
+  await page.getByRole('button',{name:'AI 없이 장소 검색 연결',exact:true}).click();
+  await expect(page.getByLabel('장소 검색 서버 접근 토큰',{exact:true})).toHaveValue('');
+  await page.getByRole('button',{name:'설정 닫기',exact:true}).click();
+  await page.getByRole('tab',{name:'링크 · 본문',exact:true}).click();
+  await page.getByLabel('게시물 링크 또는 본문',{exact:true}).fill('아이갓에브리씽 대역박점\nCAFE I GOT EVERYTHING\n서울 종로구 세종대로 193');
+  await page.getByRole('button',{name:'장소 찾기',exact:true}).click();
+  await expect(page.getByRole('button',{name:'모두 저장 (1곳)',exact:true})).toBeVisible();
+  expect(calls).toBe(1);
+  await page.getByRole('button',{name:'모두 저장 (1곳)',exact:true}).click();
+  await expect(page.getByText('1곳 저장했어요.',{exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>JSON.stringify(localStorage))).not.toContain(token);
+  await page.reload();await page.getByRole('button',{name:'설정 및 사용 안내',exact:true}).click();
+  await expect(page.getByRole('button',{name:'자동 장소 검색 끄기',exact:true})).toHaveCount(0);
+});

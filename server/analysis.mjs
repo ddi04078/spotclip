@@ -1,7 +1,7 @@
 /** Server-only module. Never import this from the Expo application. */
-export class RequestError extends Error {
-  constructor(status, message) { super(message); this.status = status; }
-}
+import { RequestError } from './errors.mjs';
+export { RequestError } from './errors.mjs';
+import { searchKakao } from './kakao.mjs';
 const clean = (s, max = 300) => typeof s === 'string' && s.trim().length <= max ? s.trim() : '';
 const norm = s => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 const score = n => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 1;
@@ -48,19 +48,9 @@ export async function analyze(body, env, request = fetch) {
   for (const p of places) {
     if (!clean(p.name) || !score(p.confidence)) throw new RequestError(502, '분석 결과 형식이 올바르지 않아요.');
     const candidate = { name: clean(p.name), regionHint: clean(p.regionHint), addressHint: clean(p.addressHint), confidence: p.confidence };
-    const query = new URLSearchParams({ query: `${candidate.name} ${candidate.regionHint}`.trim(), size: '5' });
-    const search = await jsonRequest(`https://dapi.kakao.com/v2/local/search/keyword.json?${query}`, { headers: { Authorization: `KakaoAK ${env.KAKAO_REST_API_KEY}` } }, request);
-    if (!Array.isArray(search.documents)) throw new RequestError(502, '장소 검색 결과를 읽지 못했어요.');
-    const matches = search.documents.flatMap(d => {
-      const address = clean(d.road_address_name) || clean(d.address_name);
-      const latitude = Number(d.y), longitude = Number(d.x);
-      if (!clean(d.place_name) || !address || !/^\d+$/.test(String(d.id)) || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return [];
-      // Official listing existence does not prove identity. Auto-save requires exact name AND address.
-      const exact = norm(d.place_name) === norm(candidate.name) && !!candidate.addressHint && norm(address) === norm(candidate.addressHint);
-      return [{ name: d.place_name, address, latitude, longitude,
-        category: d.category_group_code === 'CE7' ? '카페' : d.category_group_code === 'FD6' ? '맛집' : d.category_group_code === 'AT4' ? '여행' : d.category_group_code === 'MT1' ? '쇼핑' : '기타',
-        mapProvider: 'kakao', providerId: String(d.id), verification: 'official', confidence: exact ? 0.99 : 0.7 }];
-    });
+    const matches = (await searchKakao(`${candidate.name} ${candidate.regionHint}`.trim(), env, request)).map(match => ({
+      ...match, confidence: norm(match.name) === norm(candidate.name) && !!candidate.addressHint && norm(match.address) === norm(candidate.addressHint) ? .99 : .7,
+    }));
     items.push({ candidate, matches });
   }
   return { mode: 'api', items };

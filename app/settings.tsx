@@ -12,6 +12,9 @@ const scenarios: { id: MockScenario; label: string; description: string }[] = [
 ];
 export default function SettingsScreen() {
   const app = useSpotClip(); const router = useRouter();
+  const [searchEndpoint, setSearchEndpoint] = useState('');
+  const [searchToken, setSearchToken] = useState('');
+  const [searchConsent, setSearchConsent] = useState(false);
   const [endpoint, setEndpoint] = useState(app.remoteEndpoint);
   const [token, setToken] = useState('');
   const [consent, setConsent] = useState(false);
@@ -21,6 +24,15 @@ export default function SettingsScreen() {
     <Button label="사진 올리기로 돌아가기" secondary onPress={() => router.back()} />
     <View style={styles.intro}><View style={styles.symbol}><Icon name="sparkles-outline" size={28} /></View><Text style={sharedStyles.h2}>가볍게 담고, 나중에 떠나요.</Text><Text style={sharedStyles.body}>사진을 고르면 장소를 찾고,{`\n`}명확한 장소는 바로 저장하는 앱을 만들고 있어요.</Text></View>
     <View style={styles.card}><Text style={sharedStyles.h2}>사진 속 글자 인식 · 무료 OCR</Text><Text style={sharedStyles.body}>{app.ocrAvailable ? '사진 속 글자를 기기에서 읽고, 장소 후보는 최대 5개만 만들어요. 웹은 한국어·영어 인식 파일을 처음 내려받습니다. 사진은 외부로 전송하지 않아요. 지도 API 확인과 AI 호출은 하지 않아요.' : '이 실행 환경에서는 기기 OCR을 사용할 수 없어요. 기본 Mock 테스트는 그대로 가능해요. OCR 테스트에는 iPhone Development Build가 필요합니다.'}</Text><Button label="기기 OCR 테스트 켜기" disabled={disabled || !app.ocrAvailable || app.ocrMode} onPress={() => void app.enableOcr()} />{app.ocrMode && <Button label="Mock으로 돌아가기" secondary disabled={disabled} onPress={() => void app.disableRemote()} />}</View>
+    <View style={styles.card}><Text style={sharedStyles.h2}>카카오 장소 검색만 연결</Text>
+      <Text style={sharedStyles.body}>배포한 검색 서버와 카카오 키가 필요해요. 사진은 기기에서 읽고 상호·주소 검색어만 전송합니다. 유료 AI는 사용하지 않아요. 설정해도 연결 성공을 의미하지 않으며 첫 분석에서 확인해요.</Text>
+      <TextInput accessibilityLabel="장소 검색 서버 주소" placeholder="https://your-server.example/api/search" value={searchEndpoint} onChangeText={setSearchEndpoint} autoCapitalize="none" autoCorrect={false} style={sharedStyles.field} editable={!disabled}/>
+      <TextInput accessibilityLabel="장소 검색 서버 접근 토큰" placeholder="서버 접근 토큰 · 카카오 키 아님" value={searchToken} onChangeText={setSearchToken} secureTextEntry autoCapitalize="none" autoCorrect={false} style={sharedStyles.field} editable={!disabled}/>
+      <View style={styles.switch}><Text style={[sharedStyles.body,{flex:1}]}>추출한 상호·주소 검색어를 검색 서버와 카카오로 보내는 데 동의해요.</Text><Switch accessibilityLabel="장소 검색어 외부 전송 동의" value={searchConsent} onValueChange={setSearchConsent} disabled={disabled}/></View>
+      <Button label="AI 없이 장소 검색 연결" disabled={disabled || !app.ocrAvailable || !searchConsent || searchToken.trim().length<32 || !searchEndpoint.trim()} onPress={() => {void app.configurePlaceSearch(searchEndpoint,searchToken,searchConsent).then(ok=>{if(ok)setSearchToken('');});}}/>
+      {app.placeSearchConfigured && <Button label="자동 장소 검색 끄기" secondary disabled={disabled} onPress={() => void app.disconnectPlaceSearch()}/>}
+      <Text style={sharedStyles.body}>토큰과 동의는 이번 실행 중에만 유지하며 새로고침하면 해제됩니다. 카카오 쿼터·과금 조건은 별도로 확인해주세요.</Text>
+    </View>
     <View style={styles.card}><Text style={sharedStyles.body}>이번 검증 단계에서는 유료 AI 분석을 잠가두었어요. 기존 연결 코드는 유지하며 외부 API를 호출하지 않아요.</Text><Tag mock={!app.realMode}>{app.realMode ? '실제 분석 모드 · 연결 전 확인 필요' : '실제 분석 연결 설정'}</Tag>
       <Text style={sharedStyles.body}>배포한 분석 서버가 있을 때만 켜주세요. API 키는 서버에 설정하고, 아래에는 별도의 접근 토큰을 넣어요. 실제 분석에는 비용이 발생할 수 있어요.</Text>
       <Text style={sharedStyles.label}>분석 서버 주소</Text><TextInput accessibilityLabel="분석 서버 주소" value={endpoint} onChangeText={setEndpoint} placeholder="https://your-server.example/api/analyze" autoCapitalize="none" autoCorrect={false} editable={!disabled} style={sharedStyles.field} />

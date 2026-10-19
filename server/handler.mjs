@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { analyze, RequestError } from './analysis.mjs';
-export function createHandler(env = process.env, request = fetch) {
+/** @param {(body: any, env: any, request: typeof fetch) => Promise<unknown>} operation */
+export function createHandler(env = process.env, request = fetch, operation = analyze) {
   let active = false; // Personal-test concurrency guard. Use a shared rate limiter for multi-instance production.
   return async (req, res) => {
     const send = (status, value) => { res.statusCode = status; res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.end(JSON.stringify(value)); };
@@ -37,7 +38,7 @@ export function createHandler(env = process.env, request = fetch) {
         }
         body = JSON.parse(Buffer.concat(chunks).toString());
       }
-      send(200, await analyze(body, env, request));
+      send(200, await operation(body, env, request));
     } catch (error) {
       const status = error instanceof RequestError ? error.status : error instanceof SyntaxError ? 400 : 502;
       send(status, { error: error instanceof RequestError ? error.message : '분석 요청을 처리하지 못했어요. 다시 시도해주세요.' });

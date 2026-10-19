@@ -1,3 +1,4 @@
+import { placeEvidence, buildSearchPlan } from '../services/resolution/placeEvidence.ts';
 import { useState } from 'react';
 import type { AnalysisItem } from '../domain/types.ts';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -16,7 +17,7 @@ export default function AnalysisResults() {
   const image = report.source.kind === 'image' || report.source.kind === 'screenshot' ? report.source.images[0]?.reference : undefined;
   return <View style={styles.container} testID="analysis-results">
     <View style={styles.heading}><View style={styles.sparkle}><Icon name="sparkles-outline" size={23} /></View><View style={{ flex: 1 }}><Text style={styles.eyebrow}>YOUR LITTLE DISCOVERIES</Text><Text accessibilityRole="header" style={styles.title}>{completed === report.items.length && completed ? '수집함에 담았어요' : report.mode === 'ocr' ? `미확인 후보 ${report.items.length}개` : `${report.items.length}개의 장소를 찾았어요`}</Text></View>{image && <Image source={{ uri: displayImageUri(image) }} style={styles.preview} accessibilityLabel="선택한 사진" />}</View>
-    {report.mode === 'ocr' && <Text style={styles.subtitle}>사진에서 읽은 미확인 후보예요. 지도 API 확인 전이므로 이름·주소를 확인한 뒤 저장해주세요.</Text>}
+    {report.mode === 'ocr' && <Text style={styles.subtitle}>{report.items.some(item=>item.matches.some(m=>m.verification==='official')) ? '공식 지도 검색 결과를 포함한 후보예요. 이름·주소와 지점을 확인해주세요.' : '사진에서 읽은 미확인 후보예요. 지도 API 확인 전이므로 이름·주소를 확인한 뒤 저장해주세요.'}</Text>}
     {report.mode === 'mock' && <View style={styles.mockBanner}><Tag mock>Mock</Tag><Text style={styles.mockText}>사진을 실제로 분석한 결과가 아닌 체험 데이터예요. 지도 API로 확인하지 않았어요.</Text></View>}
     {report.mode === 'ocr' && report.rawText && <OcrText text={report.rawText} />}
     {!report.items.length && <Text style={styles.subtitle}>장소를 찾지 못했어요. 사진이나 본문을 다시 선택해주세요.</Text>}
@@ -28,7 +29,7 @@ export default function AnalysisResults() {
       {item.decision === 'duplicate' && <Text style={styles.savedText}>이미 저장한 장소예요</Text>}
       {item.decision === 'saved' && <Text style={styles.savedText}>{item.selected?.verification === 'mock' ? 'Mock 장소 저장됨' : item.selected?.verification === 'unverified' ? '직접 확인 후 저장 · 지도 API 미확인' : '저장됨'}</Text>}
       {item.matches.length > 1 && !['saved', 'duplicate'].includes(item.decision) && <View accessibilityRole="radiogroup" accessibilityLabel="지점 선택" style={styles.branches}>{item.matches.map(match => <Pressable accessibilityRole="radio" accessibilityLabel={match.name} accessibilityState={{ checked: item.selected?.providerId === match.providerId, disabled: !!app.busy }} disabled={!!app.busy} onPress={() => app.choose(item.id, match)} key={match.providerId || match.address} style={styles.branch}><Icon name={item.selected?.providerId === match.providerId ? 'radio-button-on' : 'radio-button-off'} size={21} /><View style={{ flex: 1 }}><Text style={styles.branchName}>{match.name}</Text><Text style={styles.address}>{match.address}</Text></View></Pressable>)}</View>}
-      {report.mode === 'ocr' && !['saved', 'duplicate'].includes(item.decision) && <CandidateReview item={item} />}
+      {report.mode === 'ocr' && !['saved', 'duplicate'].includes(item.decision) && <View style={{gap:12}}><SearchEvidence item={item} />{!item.matches.some(m=>m.verification==='official') && <CandidateReview item={item} />}</View>}
       {item.decision === 'unresolved' && report.mode !== 'ocr' && <Text style={styles.subtitle}>{report.mode === 'mock' ? '이 장소는 아직 확인할 수 없어요. 현재 Mock에 등록된 예시만 분석할 수 있습니다.' : '공식 검색에서 일치하는 장소를 찾지 못했어요. 주소가 보이는 캡처나 본문으로 다시 시도해주세요.'}</Text>}
       {item.decision === 'ready' && item.selected?.verification === 'unverified' && !item.confirmed && report.mode !== 'ocr' && <Text style={styles.subtitle}>실제 장소 검색 API 연결이 필요해요. 확인되지 않은 장소는 자동 저장하지 않아요.</Text>}
     </View>)}
@@ -67,4 +68,16 @@ function CandidateReview({ item }: { item: AnalysisItem }) {
 function OcrText({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   return <View><Pressable accessibilityRole="button" onPress={() => setOpen(!open)} style={{ paddingVertical: 12 }}><Text style={styles.againText}>{open ? '읽은 원문 접기' : '사진에서 읽은 원문 보기'}</Text></Pressable>{open && <Text selectable style={styles.subtitle}>{text}</Text>}</View>;
+}
+
+function SearchEvidence({ item }: { item: AnalysisItem }) {
+  const app = useSpotClip(); const evidence = placeEvidence(item.candidate);
+  const [open, setOpen] = useState(false); const plan = buildSearchPlan(item.candidate);
+  return <View style={{gap:10}}>
+    <Text style={styles.subtitle}>{[evidence.category && `업종 단서: ${evidence.category}`, evidence.region && `지역 단서: ${evidence.region}`].filter(Boolean).join(' · ') || '읽힌 상호로 검색할 수 있어요.'}</Text>
+    <Pressable accessibilityRole="button" onPress={() => setOpen(!open)} style={{minHeight:44,justifyContent:'center'}}><Text style={styles.againText}>{open ? '검색 단서 접기' : '검색 단서 보기'}</Text></Pressable>
+    {open && <View style={{gap:8}}><Text style={styles.subtitle}>{app.placeSearchConfigured ? '장소 검색 서버가 설정되어 있어요. 아래는 검색어 계획이며 결과 자체가 아닙니다.' : '자동 장소 검색은 아직 미연결이에요. 아래는 준비된 검색어이며 실제 검색 결과가 아닙니다.'}</Text>{plan.map((s,i) => <Text key={s.query} style={styles.subtitle}>{i+1}. {s.query}</Text>)}</View>}
+    <Button label="네이버지도에서 찾기" secondary disabled={!!app.busy || !plan.length} onPress={() => void app.searchCandidate(item.candidate,'naver')} />
+    <Button label="카카오맵에서 찾기" secondary disabled={!!app.busy || !plan.length} onPress={() => void app.searchCandidate(item.candidate,'kakao')} />
+  </View>;
 }

@@ -81,3 +81,8 @@ test('an uncertain mixed-script brand alone is flagged; ordinary uppercase brand
   assert.equal(extractPlaceCandidates('ofolZtojl=2]d 대역박점\n서울 종로구 세종대로 193')[0].confidence,.35);
   assert.equal(extractPlaceCandidates('STARBUCKS 카페\n서울 종로구 삼청로 30')[0].recognitionWarning,undefined);
 });
+
+test('readable Korean branch and English cafe name share their explicitly paired address',()=>{
+  const found=extractPlaceCandidates('아이갓에브리씽 대역박점\nCAFE I GOT EVERYTHING\n서울 종로구 세종대로 193');
+  assert.equal(found.length,1);assert.equal(found[0].aliases?.[0],'CAFE I GOT EVERYTHING');
+});

@@ -58,7 +58,7 @@ export function extractPlaceCandidates(text: string, limit = 5): ExtractedPlace[
       if (!isAddress(lines[j]) && !noise.test(lines[j]) && placeWord.test(lines[j])) break;
     }
     const next = aliasIndex >= 0 ? lines[aliasIndex] : undefined;
-    const compatibleAlias = next && (mixedGarbled(name) || (/제빵|베이커리/.test(name) && /BAKERY/.test(next)) || (/미술관|박물관/.test(name) && /MMCA|MUSEUM/.test(next)) || (/카페|커피/.test(name) && /CAFE|COFFEE/.test(next)));
+    const compatibleAlias = next && (mixedGarbled(name) || (p && /점$/.test(name) && /\b(?:CAFE|COFFEE|BAKERY)\b/.test(next)) || (/제빵|베이커리/.test(name) && /BAKERY/.test(next)) || (/미술관|박물관/.test(name) && /MMCA|MUSEUM/.test(next)) || (/카페|커피/.test(name) && /CAFE|COFFEE/.test(next)));
     if (/[가-힣]/.test(name) && next && englishPlace(next) && compatibleAlias) {
       aliases.push(next); consumed.add(aliasIndex);
       if (mixedGarbled(name)) { aliases[0] = name; name = next; confidence = .35; warning = '한글 상호 인식이 불확실해요. 영문 표기와 원본 사진을 확인해주세요.'; }

@@ -213,3 +213,11 @@ Vite/React DOM 화면, HTML/CSS, manifest/service worker, Tesseract 브라우저
 - 설계·구현 범위: [OCR 안내](docs/ocr.md)
 - 기본 Mock 흐름은 Expo Go로, Apple Vision OCR은 iPhone Development Build로 테스트합니다.
 - 유료 AI 모드 전환은 현재 기본 정책에서 잠겨 있습니다. API 키·서버 없이 기본 테스트가 가능합니다.
+
+### 장소 검색 단계 개선
+
+상호·영문 별칭·업종·주소를 함께 쓰는 검색 계획과 결과 비교를 추가했습니다.
+후보 카드에서 준비된 검색어로 외부 지도를 바로 열 수 있습니다.
+자동 카카오 검색은 기본 비활성화이며, 서버 배포·키 설정·전송 동의 후 연결할 수 있습니다.
+사진·유료 AI 전송 없이 검색어만 보내는 `/api/search` 경로를 사용합니다.
+[연결 방법과 검증 범위](docs/place-resolution.md)를 참고하세요.

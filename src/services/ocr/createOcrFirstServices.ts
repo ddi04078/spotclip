@@ -1,6 +1,7 @@
 import type { ExtractedPlace, PlaceExtractionProvider, PlaceRepository, PlaceResolverProvider, ResolvedPlace } from '../../domain/types.ts';
 import { createIngestService, SourceUnavailableError } from '../ingestPlaceSource.ts';
 import { normalize } from '../../domain/textParser.ts';
+import { placeEvidence } from '../resolution/placeEvidence.ts';
 import { extractPlaceCandidates } from './placeCandidateExtractor.ts';
 import type { OcrProvider } from './types.ts';
 export function createOcrFirstServices(options: {
@@ -11,7 +12,7 @@ export function createOcrFirstServices(options: {
   // Session-only, bounded memoization. Include address/region to keep branches separate.
   const cache = new Map<string, Promise<ResolvedPlace[]>>();
   const resolver: PlaceResolverProvider = { async resolve(candidate) {
-    const key = normalize([candidate.name, candidate.regionHint || '', candidate.addressHint || ''].join('|'));
+    const key = JSON.stringify([normalize(candidate.name), candidate.regionHint || '', candidate.addressHint || '', candidate.aliases || []]);
     let pending = cache.get(key);
     if (!pending) {
       pending = options.resolver.resolve(candidate); cache.set(key, pending);
@@ -32,7 +33,7 @@ export function createOcrFirstServices(options: {
     for (let i = 0; i < texts.length; i++) for (const c of extractPlaceCandidates(texts[i])) {
       const key = normalize(c.name + '|' + (c.addressHint || ''));
       if (seen.has(key) || candidates.length >= 5) continue;
-      seen.add(key); candidates.push({ ...c, sourceImageUri: source.kind === 'image' || source.kind === 'screenshot' ? source.images[i].reference : undefined });
+      seen.add(key); candidates.push({ ...c, regionHint: placeEvidence(c).region || c.regionHint, sourceImageUri: source.kind === 'image' || source.kind === 'screenshot' ? source.images[i].reference : undefined });
     }
     // Empty/low-confidence OCR is surfaced for review; never silently spends money.
     return { mode: 'ocr', candidates, rawText: texts.map((text, i) => `사진 ${i + 1} OCR 원문\n${text}`).join('\n\n').slice(0, 30000) };
