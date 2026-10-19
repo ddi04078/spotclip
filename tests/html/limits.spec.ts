@@ -135,3 +135,48 @@ test('OCR-only server setup uses consent, bounded queries and official results w
   await page.reload();await page.getByRole('button',{name:'설정 및 사용 안내',exact:true}).click();
   await expect(page.getByRole('button',{name:'자동 장소 검색 끄기',exact:true})).toHaveCount(0);
 });
+
+test('simple no-API cycle: review edits, save complete candidates together, reload and prevent duplicates',async({page})=>{
+  const text='카페 하나\n서울 종로구 삼청로 30\n카페 둘\n서울 종로구 세종대로 193\n카페 주소없음';
+  for(let attempt=0;attempt<2;attempt++){
+    await page.getByRole('tab',{name:'링크 · 본문',exact:true}).click();
+    await page.getByLabel('게시물 링크 또는 본문',{exact:true}).fill(text);
+    await page.getByRole('button',{name:'장소 찾기',exact:true}).click();
+    await expect(page.getByRole('heading',{name:'미확인 후보 3개',exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'카카오맵에서 찾기',exact:true})).toHaveCount(0);
+    await page.getByLabel('후보 장소명',{exact:true}).first().fill('카페 수정');
+    await page.getByLabel('후보 주소',{exact:true}).first().fill('서울 종로구 수정로 10');
+    const save=page.getByRole('button',{name:'한 번에 저장 (2곳)',exact:true});
+    await expect(save).toBeDisabled();
+    await expect(page.getByText('주소가 없거나 지점 선택이 필요한 1곳은 제외돼요.',{exact:true})).toBeVisible();
+    await page.getByRole('switch',{name:'일괄 저장할 이름과 주소 확인',exact:true}).click();
+    await save.click();
+    await expect(page.getByText(attempt?/이미 저장한 2곳은 제외/: '2곳 저장했어요.',{exact:!attempt})).toBeVisible();
+    await page.getByRole('button',{name:'내 장소에서 확인하기',exact:true}).click();
+    await expect(page.getByTestId('place-card')).toHaveCount(2);
+    await expect(page.getByText('카페 수정',{exact:true})).toBeVisible();
+    await page.getByRole('tab',{name:'추가',exact:true}).click();
+  }
+  await page.reload();await page.getByRole('tab',{name:'내 장소',exact:true}).click();
+  await expect(page.getByTestId('place-card')).toHaveCount(2);
+  await expect(page.getByText('미확인 · 직접 저장',{exact:true})).toHaveCount(2);
+});
+
+test('two selected photos complete the OCR to batch-save to durable-list cycle without map search or API setup',async({page})=>{
+  test.setTimeout(90000);
+  const files=[];
+  for(const [name,address] of [['카페 하나','서울 종로구 삼청로 30'],['카페 둘','서울 종로구 세종대로 193']]){
+    const data=await page.evaluate(({name,address})=>{const c=document.createElement('canvas');c.width=1400;c.height=600;const x=c.getContext('2d')!;x.fillStyle='white';x.fillRect(0,0,c.width,c.height);x.fillStyle='black';x.font='bold 52px "Noto Sans CJK KR", sans-serif';x.fillText(name,60,250);x.font='42px "Noto Sans CJK KR", sans-serif';x.fillText(address,60,350);return c.toDataURL().split(',')[1];},{name,address});
+    files.push({name:name+'.png',mimeType:'image/png',buffer:Buffer.from(data,'base64')});
+  }
+  const chooser=page.waitForEvent('filechooser');await page.getByRole('button',{name:'사진 / 스크린샷 올리기',exact:true}).click();await(await chooser).setFiles(files);
+  await expect(page.getByRole('heading',{name:'미확인 후보 2개',exact:true})).toBeVisible({timeout:60000});
+  expect(await page.getByLabel('후보 장소명',{exact:true}).evaluateAll(els=>els.map(e=>(e as HTMLInputElement).value.replace(/\s/g,'')))).toEqual(['카페하나','카페둘']);
+  expect(await page.evaluate(()=>localStorage.length)).toBe(0);
+  await page.getByRole('switch',{name:'일괄 저장할 이름과 주소 확인',exact:true}).click();
+  await page.getByRole('button',{name:'한 번에 저장 (2곳)',exact:true}).click();
+  await expect(page.getByText('2곳 저장했어요.',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'내 장소에서 확인하기',exact:true}).click();
+  await expect(page.getByTestId('place-card')).toHaveCount(2);
+  await page.reload();await page.getByRole('tab',{name:'내 장소',exact:true}).click();await expect(page.getByTestId('place-card')).toHaveCount(2);
+});

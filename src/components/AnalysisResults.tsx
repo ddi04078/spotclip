@@ -1,7 +1,8 @@
+import { canReviewInBatch } from '../services/ocr/reviewBatch.ts';
 import { placeEvidence, buildSearchPlan } from '../services/resolution/placeEvidence.ts';
 import { useState } from 'react';
 import type { AnalysisItem } from '../domain/types.ts';
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, Switch, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSpotClip } from '../services/AppProvider.tsx';
 import { Button, Icon, Tag } from './ui.tsx';
@@ -33,6 +34,7 @@ export default function AnalysisResults() {
       {item.decision === 'unresolved' && report.mode !== 'ocr' && <Text style={styles.subtitle}>{report.mode === 'mock' ? '이 장소는 아직 확인할 수 없어요. 현재 Mock에 등록된 예시만 분석할 수 있습니다.' : '공식 검색에서 일치하는 장소를 찾지 못했어요. 주소가 보이는 캡처나 본문으로 다시 시도해주세요.'}</Text>}
       {item.decision === 'ready' && item.selected?.verification === 'unverified' && !item.confirmed && report.mode !== 'ocr' && <Text style={styles.subtitle}>실제 장소 검색 API 연결이 필요해요. 확인되지 않은 장소는 자동 저장하지 않아요.</Text>}
     </View>)}
+    {report.mode === 'ocr' && <BatchReview key={report.items[0]?.id || 'empty'} />}
     {ready > 0 && <Button label={`모두 저장 (${ready}곳)`} onPress={() => void app.save()} disabled={!!app.busy} icon="bookmark-outline" />}
     {completed > 0 && <Button label="내 장소에서 확인하기" icon="arrow-forward" onPress={() => router.navigate('/places')} disabled={!!app.busy} />}
     <Pressable accessibilityRole="button" disabled={!!app.busy} onPress={() => void app.reset()} style={styles.again}><Text style={styles.againText}>다른 사진으로 새로 담기</Text><Icon name="add" size={18} /></Pressable>
@@ -60,8 +62,8 @@ function CandidateReview({ item }: { item: AnalysisItem }) {
   const [name, setName] = useState(item.candidate.name);
   const [address, setAddress] = useState(item.candidate.addressHint || '');
   return <View style={{ gap: 10 }}><Text style={styles.subtitle}>지도 API 미확인 · 잘못 읽힌 글자가 있으면 수정해주세요.</Text>
-    <Text style={styles.subtitle}>장소명</Text><TextInput accessibilityLabel="후보 장소명" value={name} onChangeText={setName} maxLength={200} editable={!app.busy} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.ink, fontSize: 16, minHeight: 48 }} />
-    <Text style={styles.subtitle}>주소</Text><TextInput accessibilityLabel="후보 주소" placeholder="사진에 나온 주소" value={address} onChangeText={setAddress} maxLength={300} editable={!app.busy} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.ink, fontSize: 16, minHeight: 48 }} />
+    <Text style={styles.subtitle}>장소명</Text><TextInput accessibilityLabel="후보 장소명" value={name} onChangeText={value => {setName(value);app.editCandidate(item.id,value,address);}} maxLength={200} editable={!app.busy} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.ink, fontSize: 16, minHeight: 48 }} />
+    <Text style={styles.subtitle}>주소</Text><TextInput accessibilityLabel="후보 주소" placeholder="사진에 나온 주소" value={address} onChangeText={value => {setAddress(value);app.editCandidate(item.id,name,value);}} maxLength={300} editable={!app.busy} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.ink, fontSize: 16, minHeight: 48 }} />
     <Button label="확인하고 저장" secondary disabled={!!app.busy || !name.trim() || !address.trim()} onPress={() => { app.confirmCandidate(item.id, name, address); void app.save(); }} />
   </View>;
 }
@@ -77,7 +79,21 @@ function SearchEvidence({ item }: { item: AnalysisItem }) {
     <Text style={styles.subtitle}>{[evidence.category && `업종 단서: ${evidence.category}`, evidence.region && `지역 단서: ${evidence.region}`].filter(Boolean).join(' · ') || '읽힌 상호로 검색할 수 있어요.'}</Text>
     <Pressable accessibilityRole="button" onPress={() => setOpen(!open)} style={{minHeight:44,justifyContent:'center'}}><Text style={styles.againText}>{open ? '검색 단서 접기' : '검색 단서 보기'}</Text></Pressable>
     {open && <View style={{gap:8}}><Text style={styles.subtitle}>{app.placeSearchConfigured ? '장소 검색 서버가 설정되어 있어요. 아래는 검색어 계획이며 결과 자체가 아닙니다.' : '자동 장소 검색은 아직 미연결이에요. 아래는 준비된 검색어이며 실제 검색 결과가 아닙니다.'}</Text>{plan.map((s,i) => <Text key={s.query} style={styles.subtitle}>{i+1}. {s.query}</Text>)}</View>}
-    <Button label="네이버지도에서 찾기" secondary disabled={!!app.busy || !plan.length} onPress={() => void app.searchCandidate(item.candidate,'naver')} />
-    <Button label="카카오맵에서 찾기" secondary disabled={!!app.busy || !plan.length} onPress={() => void app.searchCandidate(item.candidate,'kakao')} />
+    {open && <Button label="네이버지도에서 찾기" secondary disabled={!!app.busy || !plan.length} onPress={() => void app.searchCandidate(item.candidate,'naver')} />}
+    {open && <Button label="카카오맵에서 찾기" secondary disabled={!!app.busy || !plan.length} onPress={() => void app.searchCandidate(item.candidate,'kakao')} />}
+  </View>;
+}
+
+function BatchReview() {
+  const app=useSpotClip();const [checked,setChecked]=useState(false);const report=app.report!;
+  const count=report.items.filter(canReviewInBatch).length;
+  const pending=report.items.filter(i=>!['saved','duplicate'].includes(i.decision)).length;
+  if(!pending)return null;
+  return <View style={styles.result}>
+    <Text style={styles.title}>확인한 장소 한 번에 담기</Text>
+    <Text style={styles.subtitle}>이름과 주소가 있는 {count}곳을 SpotClip에 저장해요. 지도 즐겨찾기에 자동 저장되는 기능은 아니에요.</Text>
+    {pending>count && <Text style={styles.warning}>주소가 없거나 지점 선택이 필요한 {pending-count}곳은 제외돼요.</Text>}
+    <View style={{flexDirection:'row',gap:12,alignItems:'center'}}><Text style={[styles.subtitle,{flex:1}]}>저장할 이름과 주소를 확인했어요.</Text><Switch accessibilityLabel="일괄 저장할 이름과 주소 확인" value={checked} onValueChange={setChecked} disabled={!!app.busy}/></View>
+    <Button label={`한 번에 저장 (${count}곳)`} disabled={!!app.busy || !checked || !count} onPress={() => void app.saveBatch()}/>
   </View>;
 }

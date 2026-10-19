@@ -1,3 +1,4 @@
+import { confirmOcrBatch } from './ocr/reviewBatch.ts';
 import { EvidencePlaceResolver } from './resolution/EvidencePlaceResolver.ts';
 import { createRemotePlaceSearch } from './resolution/RemotePlaceSearch.ts';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -157,6 +158,17 @@ function useController(deps: AppDependencies) {
     if (!current || guard.current) return;
     setReport({ ...current, items: current.items.map(item => item.id === id ? { ...item, selected, decision: 'ready', confirmed: selected.verification !== 'unverified' } : item) });
   }
+  function editCandidate(id: string, name: string, address: string) {
+    const current=reportRef.current;
+    if(guard.current || !current || current.mode!=='ocr')return;
+    setReport({...current,items:current.items.map(item=>item.id===id && !['saved','duplicate'].includes(item.decision) && !item.matches.some(m=>m.verification==='official') ? {...item,candidate:{...item.candidate,name,addressHint:address},selected:item.selected?{...item.selected,name,address}:undefined,confirmed:false} : item)});
+  }
+  const saveBatch = () => run(async () => {
+    const current=reportRef.current;if(!current || current.mode!=='ocr')return;
+    setBusy('확인한 장소를 한 번에 저장하고 있어요…');
+    const result=await services.saveReviewed(confirmOcrBatch(current));
+    setReport(result.report);await reload();setNotice(saveMessage(result.outcome.saved.length,result.outcome.duplicates.length));
+  });
   function confirmCandidate(id: string, name: string, address: string) {
     if (guard.current || !name.trim() || !address.trim() || name.length > 200 || address.length > 300) return;
     const current = reportRef.current;
@@ -170,7 +182,7 @@ function useController(deps: AppDependencies) {
   const searchCandidate = (candidate: ExtractedPlace, app: MapApp) => run(() => (deps.searchCandidate || openCandidateSearch)(candidate, app));
   const map = (place: Place, app: MapApp) => run(() => deps.openMap(place, app));
   const reset = () => run(async () => { setReport(null); setUrlBlocked(false); await clean(null); });
-  return { placeSearchConfigured: !!placeSearchRemote, configurePlaceSearch, disconnectPlaceSearch, searchCandidate, confirmCandidate, paidAnalysisEnabled, ocrMode, ocrAvailable: isOnDeviceOcrAvailable, enableOcr, realMode: !!remote, remoteEndpoint: remote?.endpoint || '', configureRemote, disableRemote, places, report, scenario, setScenario, mockAutoSave, setMockAutoSave, ready, busy, error, notice, urlBlocked, pick, ingestPlaceSource, save, choose, remove, update, map, reset };
+  return { editCandidate, saveBatch, placeSearchConfigured: !!placeSearchRemote, configurePlaceSearch, disconnectPlaceSearch, searchCandidate, confirmCandidate, paidAnalysisEnabled, ocrMode, ocrAvailable: isOnDeviceOcrAvailable, enableOcr, realMode: !!remote, remoteEndpoint: remote?.endpoint || '', configureRemote, disableRemote, places, report, scenario, setScenario, mockAutoSave, setMockAutoSave, ready, busy, error, notice, urlBlocked, pick, ingestPlaceSource, save, choose, remove, update, map, reset };
 }
 function message(e: unknown): string { return e instanceof Error ? e.message : '처리하지 못했어요. 잠시 후 다시 시도해주세요.'; }
 function saveMessage(saved: number, duplicates: number): string {
