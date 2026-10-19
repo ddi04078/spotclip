@@ -48,7 +48,7 @@ export function createIngestService(deps: IngestDependencies) {
       const savedIds = new Set(automatic.saved.map(p => p.id));
       let index = 0;
       for (const item of items) if (item.decision === 'saved') item.decision = savedIds.has(auto[index++].id) ? 'saved' : 'duplicate';
-      return { source, mode: extracted.mode, rawText: extracted.rawText, items, automatic };
+      return { source, sources: extracted.sources, mode: extracted.mode, rawText: extracted.rawText, items, automatic };
     },
     async saveReviewed(report: AnalysisReport): Promise<{ outcome: SaveOutcome; report: AnalysisReport }> {
       const pending = report.items.filter(item => item.decision === 'ready' && item.selected && item.confirmed);

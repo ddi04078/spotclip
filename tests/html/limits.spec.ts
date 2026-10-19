@@ -63,8 +63,8 @@ test('OCR download failure surfaces an error without mock fallback or API calls'
   await context.route('http://localhost:18181/spotclip/ocr/worker.min.js',r=>r.fulfill({status:503,contentType:'application/javascript',body:'Service Unavailable'}));
   const errors: string[]=[];page.on('pageerror',e=>errors.push(e.message));
   const img=await readFile('assets/icon.png');await upload(page,'capture.png',img);
-  await expect(page.getByText(/사진의 글자를 읽지 못했어요/)).toBeVisible({timeout:15000});
-  await expect(page.getByTestId('analysis-results')).toHaveCount(0);
+  await expect(page.getByText('사진 1: 분석 실패 · 다른 사진의 결과는 유지했어요',{exact:true})).toBeVisible({timeout:15000});
+  await expect(page.getByRole('heading',{name:'미확인 후보 0개',exact:true})).toBeVisible();
   expect(paidCalls).toBe(0);expect(await page.evaluate(()=>localStorage.length)).toBe(0);
 });
 test('blank image has zero candidates and no saved places',async({page})=>{
@@ -146,20 +146,21 @@ test('simple no-API cycle: review edits, save complete candidates together, relo
     await expect(page.getByRole('button',{name:'카카오맵에서 찾기',exact:true})).toHaveCount(0);
     await page.getByLabel('후보 장소명',{exact:true}).first().fill('카페 수정');
     await page.getByLabel('후보 주소',{exact:true}).first().fill('서울 종로구 수정로 10');
-    const save=page.getByRole('button',{name:'한 번에 저장 (2곳)',exact:true});
+    await page.getByLabel('후보 주소',{exact:true}).last().fill('서울 종로구 보완로 3');
+    const save=page.getByRole('button',{name:'한 번에 저장 (3곳)',exact:true});
     await expect(save).toBeDisabled();
-    await expect(page.getByText('주소가 없거나 지점 선택이 필요한 1곳은 제외돼요.',{exact:true})).toBeVisible();
+
     await page.getByRole('switch',{name:'일괄 저장할 이름과 주소 확인',exact:true}).click();
     await save.click();
-    await expect(page.getByText(attempt?/이미 저장한 2곳은 제외/: '2곳 저장했어요.',{exact:!attempt})).toBeVisible();
+    await expect(page.getByText(attempt?/이미 저장한 3곳은 제외/: '3곳 저장했어요.',{exact:!attempt})).toBeVisible();
     await page.getByRole('button',{name:'내 장소에서 확인하기',exact:true}).click();
-    await expect(page.getByTestId('place-card')).toHaveCount(2);
+    await expect(page.getByTestId('place-card')).toHaveCount(3);
     await expect(page.getByText('카페 수정',{exact:true})).toBeVisible();
     await page.getByRole('tab',{name:'추가',exact:true}).click();
   }
   await page.reload();await page.getByRole('tab',{name:'내 장소',exact:true}).click();
-  await expect(page.getByTestId('place-card')).toHaveCount(2);
-  await expect(page.getByText('미확인 · 직접 저장',{exact:true})).toHaveCount(2);
+  await expect(page.getByTestId('place-card')).toHaveCount(3);
+  await expect(page.getByText('미확인 · 직접 저장',{exact:true})).toHaveCount(3);
 });
 
 test('two selected photos complete the OCR to batch-save to durable-list cycle without map search or API setup',async({page})=>{
@@ -179,4 +180,32 @@ test('two selected photos complete the OCR to batch-save to durable-list cycle w
   await page.getByRole('button',{name:'내 장소에서 확인하기',exact:true}).click();
   await expect(page.getByTestId('place-card')).toHaveCount(2);
   await page.reload();await page.getByRole('tab',{name:'내 장소',exact:true}).click();await expect(page.getByTestId('place-card')).toHaveCount(2);
+});
+
+test('three named candidates with only one address can all be saved without inventing addresses',async({page})=>{
+  await page.getByRole('tab',{name:'링크 · 본문',exact:true}).click();
+  await page.getByLabel('게시물 링크 또는 본문',{exact:true}).fill('하이그라운드 제빵소\nHIGHGROUND BAKERY\n테라로사 국립현대미술관 서울점\nTERAROSA MMCA SEOUL\nofolZtojl=2]d 대역박점\nCAFE I GOT EVERYTHING\n서울 종로구 세종대로 193');
+  await page.getByRole('button',{name:'장소 찾기',exact:true}).click();
+  await expect(page.getByText('주소를 못 읽은 장소도 미확인 상태로 저장해요. 주소를 만들어 넣지 않습니다.',{exact:true})).toBeVisible();
+  await page.getByRole('switch',{name:'일괄 저장할 이름과 주소 확인',exact:true}).click();
+  await page.getByRole('button',{name:'한 번에 저장 (3곳)',exact:true}).click();
+  await expect(page.getByText('3곳 저장했어요.',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'내 장소에서 확인하기',exact:true}).click();
+  await expect(page.getByTestId('place-card')).toHaveCount(3);
+  await expect(page.getByText('주소 미확인 · 장소명으로 지도 검색 가능',{exact:true})).toHaveCount(2);
+  await page.reload();await page.getByRole('tab',{name:'내 장소',exact:true}).click();await expect(page.getByTestId('place-card')).toHaveCount(3);
+});
+
+test('every selected photo gets a visible status, and an unreadable photo can be manually supplemented',async({page,context})=>{
+  await context.route('http://localhost:18181/spotclip/ocr/worker.min.js',r=>r.fulfill({status:503,contentType:'application/javascript',body:'Service Unavailable'}));
+  const image=await readFile('assets/icon.png');const chooser=page.waitForEvent('filechooser');
+  await page.getByRole('button',{name:'사진 / 스크린샷 올리기',exact:true}).click();
+  await(await chooser).setFiles([1,2,3].map(n=>({name:`capture-${n}.png`,mimeType:'image/png',buffer:image})));
+  await expect(page.getByText('사진 3장 분석 결과',{exact:true})).toBeVisible({timeout:20000});
+  for(let n=1;n<=3;n++)await expect(page.getByText(`사진 ${n}: 분석 실패 · 다른 사진의 결과는 유지했어요`,{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'사진 2 장소 직접 보완',exact:true}).click();
+  await page.getByLabel('후보 장소명',{exact:true}).fill('직접 확인한 카페');
+  await page.getByRole('switch',{name:'일괄 저장할 이름과 주소 확인',exact:true}).click();
+  await page.getByRole('button',{name:'한 번에 저장 (1곳)',exact:true}).click();
+  await expect(page.getByText('1곳 저장했어요.',{exact:true})).toBeVisible();
 });

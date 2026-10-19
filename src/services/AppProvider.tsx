@@ -70,7 +70,7 @@ function useController(deps: AppDependencies) {
   const [notice, setNotice] = useState('');
   const [urlBlocked, setUrlBlocked] = useState(false);
   const guard = useRef(false);
-  const services = useMemo(() => ocrMode ? createOcrFirstServices({ ocr: onDeviceOcr, resolver: deps.placeResolver || evidenceResolver || new UnverifiedPlaceResolver(), repository: deps.storage, id: deps.id }) : createServices(deps.storage, { scenario, mockAutoSave }, deps.id, remote ? {
+  const services = useMemo(() => ocrMode ? createOcrFirstServices({ ocr: onDeviceOcr, resolver: deps.placeResolver || evidenceResolver || new UnverifiedPlaceResolver(), maxResolverCandidates: evidenceResolver ? 5 : undefined, repository: deps.storage, id: deps.id }) : createServices(deps.storage, { scenario, mockAutoSave }, deps.id, remote ? {
     endpoint: remote.endpoint, accessToken: async () => remote.token, consent: async () => true,
     readImage: deps.readImage || readAnalysisImage, request: deps.request,
   } : undefined), [deps, scenario, mockAutoSave, remote, ocrMode, evidenceResolver]);
@@ -170,19 +170,26 @@ function useController(deps: AppDependencies) {
     setReport(result.report);await reload();setNotice(saveMessage(result.outcome.saved.length,result.outcome.duplicates.length));
   });
   function confirmCandidate(id: string, name: string, address: string) {
-    if (guard.current || !name.trim() || !address.trim() || name.length > 200 || address.length > 300) return;
+    if (guard.current || !name.trim() || name.length > 150 || address.length > 300) return;
     const current = reportRef.current;
     if (!current || current.mode !== 'ocr') return;
     setReport({ ...current, items: current.items.map(item => item.id === id ? {
       ...item, selected: { name: name.trim(), address: address.trim(), category: placeEvidence(item.candidate).category || '기타', mapProvider: 'none', confidence: Math.min(.65, item.candidate.confidence), verification: 'unverified' }, decision: 'ready', confirmed: true,
     } : item) });
   }
+  function addSourceCandidate(imageId: string) {
+    const report=reportRef.current;
+    if(guard.current || !report || report.mode!=='ocr' || !(report.source.kind==='image'||report.source.kind==='screenshot'))return;
+    const image=report.source.images.find(i=>i.id===imageId);
+    if(!image || report.items.some(i=>i.candidate.sourceImageUri===image.reference))return;
+    setReport({...report,items:[...report.items,{id:deps.id(),candidate:{name:'',addressHint:'',confidence:0,sourceImageUri:image.reference},matches:[],decision:'unresolved',confirmed:false}]});
+  }
   const remove = (id: string) => run(async () => { await deps.storage.remove(id); await reload(); await clean(); setNotice('장소를 삭제했어요.'); });
   const update = (place: Place) => run(async () => { await deps.storage.update(place); await reload(); setNotice('변경 내용을 저장했어요.'); });
   const searchCandidate = (candidate: ExtractedPlace, app: MapApp) => run(() => (deps.searchCandidate || openCandidateSearch)(candidate, app));
   const map = (place: Place, app: MapApp) => run(() => deps.openMap(place, app));
   const reset = () => run(async () => { setReport(null); setUrlBlocked(false); await clean(null); });
-  return { editCandidate, saveBatch, placeSearchConfigured: !!placeSearchRemote, configurePlaceSearch, disconnectPlaceSearch, searchCandidate, confirmCandidate, paidAnalysisEnabled, ocrMode, ocrAvailable: isOnDeviceOcrAvailable, enableOcr, realMode: !!remote, remoteEndpoint: remote?.endpoint || '', configureRemote, disableRemote, places, report, scenario, setScenario, mockAutoSave, setMockAutoSave, ready, busy, error, notice, urlBlocked, pick, ingestPlaceSource, save, choose, remove, update, map, reset };
+  return { addSourceCandidate, editCandidate, saveBatch, placeSearchConfigured: !!placeSearchRemote, configurePlaceSearch, disconnectPlaceSearch, searchCandidate, confirmCandidate, paidAnalysisEnabled, ocrMode, ocrAvailable: isOnDeviceOcrAvailable, enableOcr, realMode: !!remote, remoteEndpoint: remote?.endpoint || '', configureRemote, disableRemote, places, report, scenario, setScenario, mockAutoSave, setMockAutoSave, ready, busy, error, notice, urlBlocked, pick, ingestPlaceSource, save, choose, remove, update, map, reset };
 }
 function message(e: unknown): string { return e instanceof Error ? e.message : '처리하지 못했어요. 잠시 후 다시 시도해주세요.'; }
 function saveMessage(saved: number, duplicates: number): string {

@@ -20,6 +20,7 @@ export default function AnalysisResults() {
     <View style={styles.heading}><View style={styles.sparkle}><Icon name="sparkles-outline" size={23} /></View><View style={{ flex: 1 }}><Text style={styles.eyebrow}>YOUR LITTLE DISCOVERIES</Text><Text accessibilityRole="header" style={styles.title}>{completed === report.items.length && completed ? '수집함에 담았어요' : report.mode === 'ocr' ? `미확인 후보 ${report.items.length}개` : `${report.items.length}개의 장소를 찾았어요`}</Text></View>{image && <Image source={{ uri: displayImageUri(image) }} style={styles.preview} accessibilityLabel="선택한 사진" />}</View>
     {report.mode === 'ocr' && <Text style={styles.subtitle}>{report.items.some(item=>item.matches.some(m=>m.verification==='official')) ? '공식 지도 검색 결과를 포함한 후보예요. 이름·주소와 지점을 확인해주세요.' : '사진에서 읽은 미확인 후보예요. 지도 API 확인 전이므로 이름·주소를 확인한 뒤 저장해주세요.'}</Text>}
     {report.mode === 'mock' && <View style={styles.mockBanner}><Tag mock>Mock</Tag><Text style={styles.mockText}>사진을 실제로 분석한 결과가 아닌 체험 데이터예요. 지도 API로 확인하지 않았어요.</Text></View>}
+    {report.mode === 'ocr' && report.sources?.length ? <View style={styles.result}><Text style={styles.title}>사진 {report.sources.length}장 분석 결과</Text>{report.sources.map(s => <View key={s.imageId} style={{gap:8}}><Text style={styles.subtitle}>사진 {s.index+1}: {s.status==='found'?`후보 ${s.count}개`:s.status==='duplicate'?'같은 주소의 중복 후보':s.status==='error'?'분석 실패 · 다른 사진의 결과는 유지했어요':'장소 글자를 찾지 못했어요'}</Text>{['empty','error'].includes(s.status) && <Button label={`사진 ${s.index+1} 장소 직접 보완`} secondary disabled={!!app.busy || report.items.some(i=>i.candidate.sourceImageUri === ((report.source.kind==='image'||report.source.kind==='screenshot') ? report.source.images[s.index]?.reference : ''))} onPress={()=>app.addSourceCandidate(s.imageId)}/>}</View>)}</View> : null}
     {report.mode === 'ocr' && report.rawText && <OcrText text={report.rawText} />}
     {!report.items.length && <Text style={styles.subtitle}>장소를 찾지 못했어요. 사진이나 본문을 다시 선택해주세요.</Text>}
     {report.items.map(item => <View style={styles.result} key={item.id}>
@@ -62,9 +63,9 @@ function CandidateReview({ item }: { item: AnalysisItem }) {
   const [name, setName] = useState(item.candidate.name);
   const [address, setAddress] = useState(item.candidate.addressHint || '');
   return <View style={{ gap: 10 }}><Text style={styles.subtitle}>지도 API 미확인 · 잘못 읽힌 글자가 있으면 수정해주세요.</Text>
-    <Text style={styles.subtitle}>장소명</Text><TextInput accessibilityLabel="후보 장소명" value={name} onChangeText={value => {setName(value);app.editCandidate(item.id,value,address);}} maxLength={200} editable={!app.busy} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.ink, fontSize: 16, minHeight: 48 }} />
-    <Text style={styles.subtitle}>주소</Text><TextInput accessibilityLabel="후보 주소" placeholder="사진에 나온 주소" value={address} onChangeText={value => {setAddress(value);app.editCandidate(item.id,name,value);}} maxLength={300} editable={!app.busy} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.ink, fontSize: 16, minHeight: 48 }} />
-    <Button label="확인하고 저장" secondary disabled={!!app.busy || !name.trim() || !address.trim()} onPress={() => { app.confirmCandidate(item.id, name, address); void app.save(); }} />
+    <Text style={styles.subtitle}>장소명</Text><TextInput accessibilityLabel="후보 장소명" value={name} onChangeText={value => {setName(value);app.editCandidate(item.id,value,address);}} maxLength={150} editable={!app.busy} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.ink, fontSize: 16, minHeight: 48 }} />
+    <Text style={styles.subtitle}>주소</Text><TextInput accessibilityLabel="후보 주소" placeholder="주소를 못 읽었으면 비워둬도 돼요" value={address} onChangeText={value => {setAddress(value);app.editCandidate(item.id,name,value);}} maxLength={300} editable={!app.busy} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.ink, fontSize: 16, minHeight: 48 }} />
+    <Button label="확인하고 저장" secondary disabled={!!app.busy || !name.trim()} onPress={() => { app.confirmCandidate(item.id, name, address); void app.save(); }} />
   </View>;
 }
 function OcrText({ text }: { text: string }) {
@@ -91,8 +92,9 @@ function BatchReview() {
   if(!pending)return null;
   return <View style={styles.result}>
     <Text style={styles.title}>확인한 장소 한 번에 담기</Text>
-    <Text style={styles.subtitle}>이름과 주소가 있는 {count}곳을 SpotClip에 저장해요. 지도 즐겨찾기에 자동 저장되는 기능은 아니에요.</Text>
-    {pending>count && <Text style={styles.warning}>주소가 없거나 지점 선택이 필요한 {pending-count}곳은 제외돼요.</Text>}
+    <Text style={styles.subtitle}>이름을 확인한 {count}곳을 SpotClip에 저장해요. 지도 즐겨찾기에 자동 저장되는 기능은 아니에요.</Text>
+    {report.items.some(i=>canReviewInBatch(i)&&!i.candidate.addressHint?.trim()&&i.selected?.verification!=='official') && <Text style={styles.warning}>주소를 못 읽은 장소도 미확인 상태로 저장해요. 주소를 만들어 넣지 않습니다.</Text>}
+    {pending>count && <Text style={styles.warning}>이름이 없거나 지점 선택이 필요한 {pending-count}곳은 확인이 필요해요.</Text>}
     <View style={{flexDirection:'row',gap:12,alignItems:'center'}}><Text style={[styles.subtitle,{flex:1}]}>저장할 이름과 주소를 확인했어요.</Text><Switch accessibilityLabel="일괄 저장할 이름과 주소 확인" value={checked} onValueChange={setChecked} disabled={!!app.busy}/></View>
     <Button label={`한 번에 저장 (${count}곳)`} disabled={!!app.busy || !checked || !count} onPress={() => void app.saveBatch()}/>
   </View>;

@@ -5,6 +5,7 @@ export function normalize(value: string): string {
 }
 export function samePlace(a: Place, b: Place): boolean {
   if (a.mapProvider !== 'none' && a.mapProvider === b.mapProvider && a.providerId && a.providerId === b.providerId) return true;
+  if (!a.address.trim() && !b.address.trim() && a.verification==='unverified' && b.verification==='unverified') return !!a.sourceImageUri && a.sourceImageUri===b.sourceImageUri && normalize(a.name)===normalize(b.name);
   return !!a.address && !!b.address && normalize(a.name) === normalize(b.name) && normalize(a.address) === normalize(b.address);
 }
 export function parsePublicUrl(value: string): string | null {
@@ -36,7 +37,7 @@ export function isPlace(value: unknown): value is Place {
   const text = (v: unknown, max: number) => typeof v === 'string' && v.length <= max;
   const optionalText = (v: unknown, max: number) => v === undefined || text(v, max);
   const coord = (v: unknown, bound: number) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= bound;
-  return text(p.id, 200) && !!p.id && text(p.name, 150) && !!p.name.trim() && text(p.address, 300) && !!p.address.trim()
+  return text(p.id, 200) && !!p.id && text(p.name, 150) && !!p.name.trim() && text(p.address, 300) && (!!p.address.trim() || (p.verification === 'unverified' && p.mapProvider === 'none'))
     && categories.includes(p.category) && ['mock', 'official', 'unverified'].includes(p.verification)
     && ['mock', 'kakao', 'naver', 'none'].includes(p.mapProvider) && optionalText(p.providerId, 150)
     && typeof p.confidence === 'number' && Number.isFinite(p.confidence) && p.confidence >= 0 && p.confidence <= 1

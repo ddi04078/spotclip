@@ -49,7 +49,9 @@ export interface Place extends ResolvedPlace {
   note: string;
   visited: boolean;
 }
+export interface SourceAnalysis { imageId: string; index: number; status: 'found' | 'empty' | 'error' | 'duplicate'; count: number }
 export interface ExtractionResult {
+  sources?: SourceAnalysis[];
   candidates: ExtractedPlace[];
   mode: 'mock' | 'ocr' | 'api';
   rawText?: string;
@@ -77,6 +79,7 @@ export interface AnalysisItem {
   confirmed: boolean;
 }
 export interface AnalysisReport {
+  sources?: SourceAnalysis[];
   source: PlaceSource;
   mode: ExtractionResult['mode'];
   rawText?: string;

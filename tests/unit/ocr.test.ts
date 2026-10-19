@@ -23,7 +23,7 @@ test('multiple screenshots dedupe/cap resolver calls, successful repeated lookup
     fallback: { async extract() { paidCalls++; throw new Error('must never call'); } },
   });
   const first = await service.ingestPlaceSource({ kind: 'screenshot', images: [image, { ...image, id: '2' }] });
-  assert.equal(first.mode, 'ocr'); assert.equal(calls, 5); assert.equal(first.items.length, 5);
+  assert.equal(first.mode, 'ocr'); assert.equal(calls, 5); assert.equal(first.items.length, 10);
   assert.equal(first.automatic.saved.length, 0); // name-only OCR is deliberately low confidence
   await service.ingestPlaceSource({ kind: 'screenshot', images: [image] });
   assert.equal(calls, 5); assert.equal(paidCalls, 0);
@@ -35,7 +35,8 @@ test('empty OCR and OCR failures do not fabricate or save places and never trigg
   assert.equal((await service.ingestPlaceSource({ kind: 'image', images: [image] })).items.length, 0);
   assert.equal(calls, 0); assert.equal((await repository.list()).length, 0);
   const broken = createOcrFirstServices({ repository, id: ids(), ocr: { async recognize() { throw new Error('OCR unavailable'); } }, resolver: { async resolve() { return []; } } });
-  await assert.rejects(broken.ingestPlaceSource({ kind: 'image', images: [image] }), /OCR unavailable/);
+  const failed = await broken.ingestPlaceSource({ kind: 'image', images: [image] });
+  assert.equal(failed.items.length,0);assert.equal(failed.sources?.[0].status,'error');assert.equal((await repository.list()).length,0);
 });
 
 test('reported 2+2+1 bilingual duplicates become three candidates without inventing a Korean name', () => {
