@@ -24,7 +24,8 @@
     "test:html": "playwright test --config playwright.html.config.ts",
     "server": "node --env-file=.env server/start.mjs",
     "dev:client": "expo start --dev-client --max-workers 2",
-    "ios:device": "expo run:ios --device"
+    "ios:device": "expo run:ios --device",
+    "check:search": "node --env-file-if-exists=.env scripts/check-place-search.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.17",

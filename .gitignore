@@ -26,3 +26,5 @@ expo-env.d.ts
 # @end expo-cli
 
 /public/ocr/
+/server-public/
+.vercel/

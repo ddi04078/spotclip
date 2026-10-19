@@ -38,7 +38,7 @@ AI fallback은 호출하지 않습니다.
 
 1. Kakao Developers 앱/Local API 이용 조건·쿼터를 확인하고 REST API 키를 발급합니다.
 2. `iphone-test` 소스 브랜치를 서버리스 호스트에 배포하고 `/api/search` HTTPS 주소를 준비합니다.
-   Vercel에서는 Framework Preset Other, Build Command `mkdir -p public`, Output Directory `public`로 설정하면
+   저장소의 `vercel.json`이 Framework Other와 서버 전용 출력 폴더를 지정하므로 프로젝트를 Import하면
    Expo 네이티브 빌드를 서버 배포 단계에서 실행하지 않고 `api/` Node 함수를 배포할 수 있습니다.
    호스트의 현재 Node 함수 설정·요금/런타임 제한은 배포 시 확인하세요. 이 작업에서는 원격 서버를 배포하지 않았습니다.
 3. 서버 환경에 KAKAO_REST_API_KEY, 무작위32자 이상 SPOTCLIP_ACCESS_TOKEN,
@@ -63,3 +63,24 @@ AI fallback은 호출하지 않습니다.
 - 카카오 최신 문서 URL은 현재 환경에서403으로 차단되어 재확인하지 못함:
   https://developers.kakao.com/docs/latest/ko/local/dev-guide
 - 사용자 원본 이미지 및 실제 iPhone 검증은 별도 필요. 이번 변경으로 한글 OCR 자체가 완벽해진 것은 아님
+
+## 배포 후 한 번만 연결 검증
+
+Vercel Import 시 Production Branch를 반드시 `iphone-test`로 지정합니다. `main`은 초기 README 상태입니다.
+GitHub Pages 사이트는 유지되고 서버만 별도 배포됩니다. Vercel 환경변수를 바꾼 뒤에는 Redeploy가 필요합니다.
+배포 보호가 켜져 있으면 앱에서 API를 부를 수 없으므로 해당 개인 테스트 배포의 접근 정책을 확인하세요.
+카카오 REST 키는 Vercel 서버 환경변수에만 보관하고, 앱에는 별도 접근 토큰만 입력합니다.
+접근 토큰은 비밀번호 생성기로 무작위32자 이상 생성합니다. 소스나 채팅에 올리지 마세요.
+
+선택적으로 컴퓨터의 무시되는 `.env`에 `SPOTCLIP_SEARCH_ENDPOINT=https://배포호스트/api/search`와
+서버에 넣은 `SPOTCLIP_ACCESS_TOKEN`을 설정합니다. 이 CLI에는 카카오 키가 필요 없습니다.
+
+- `npm run check:search`: 입력 형식만 점검. 외부 호출 없음. 서버 연결 성공을 의미하지 않음.
+- `npm run check:search -- --live`: **카카오 검색 한 번**을 요청하고 공식 장소 응답을 확인. AI 호출 없음.
+
+CLI는 오류 응답 원문이나 토큰을 출력하지 않습니다. CLI 성공은 웹 CORS 성공을 증명하지 않습니다.
+그 후 기존 브라우저 체험 사이트에서 설정 → 카카오 장소 검색만 연결 → 동의 → 사진3장 분석을 실행합니다.
+사진별 결과가 남는지, 공식 결과/미확인 상태가 구분되는지, 일괄 저장과 중복 방지가 되는지 확인하세요.
+실패하면 HTTP 상태와 현상만 전달하고 키·토큰은 보내지 마세요.
+
+이번 배포 준비에서 실제 카카오 요청이나 원격 배포는 실행하지 않았습니다. 키·호스트 계정이 없기 때문입니다.

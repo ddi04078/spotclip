@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "node -e \"require('node:fs').mkdirSync('server-public',{recursive:true})\"",
+  "outputDirectory": "server-public",
+  "functions": {
+    "api/*.mjs": { "maxDuration": 30 }
+  }
+}
